@@ -40,14 +40,41 @@ pub fn init(
 
 pub fn scan(self: Book, allocator: Allocator, database: Database) !void {
     var it = self._dir.iterate();
+
+    var db_entries = std.ArrayList(CreateMany.Entry).empty;
+    defer db_entries.deinit(allocator);
+
+    var filenames = std.ArrayList([]u8).empty;
+    defer filenames.deinit(allocator);
+
     while (try it.next()) |entry| {
-        switch (entry.kind) {
-            .file => {
-                const chapter = try Chapter.init(allocator, database, self.id, entry.name);
-                self.chapters.append(allocator, chapter) catch @panic("OOM");
-            },
-            else => {},
+        if (entry.kind == .file) {
+            const duped_name = try allocator.dupe(u8, entry.name);
+            const info = Chapter.parseName(duped_name);
+
+            try db_entries.append(allocator, .{
+                .file_name = duped_name,
+                .kind = info.kind,
+                .number = @intCast(info.number),
+            });
+
+            try filenames.append(allocator, duped_name);
         }
+    }
+
+    if (db_entries.items.len == 0) return;
+
+    const responses = try CreateMany.call(
+        allocator,
+        database,
+        self.id,
+        db_entries.items,
+    );
+    defer allocator.free(responses);
+
+    for (responses, filenames.items) |res, filename| {
+        const chapter = Chapter.init(res.number, filename);
+        try self.chapters.append(allocator, chapter);
     }
 }
 
@@ -64,6 +91,7 @@ pub fn deinit(self: Book, allocator: Allocator) void {
 
 const Chapter = @import("chapter.zig");
 
+const CreateMany = @import("../database/chapter.zig").CreateMany;
 const Create = @import("../database/book.zig").Create;
 const Database = @import("../database.zig");
 

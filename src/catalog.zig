@@ -36,7 +36,6 @@ pub fn scan(
         switch (entry.kind) {
             .directory => {
                 const library_dir = try catalog._dir.openDir(entry.name, .{ .iterate = true });
-                // std.debug.print("entry name {s}\n", .{entry.name});
                 const library = try Library.init(
                     allocator,
                     library_dir,

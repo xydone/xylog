@@ -6,22 +6,13 @@ is_read: bool,
 
 pub const Chapter = @This();
 
-pub fn init(allocator: Allocator, database: Database, book_id: i64, name: []const u8) !Chapter {
-    const duped_name = allocator.dupe(u8, name) catch @panic("OOM");
-
-    const parsed_info = parseName(duped_name);
-
-    const response = try Create.call(
-        database,
-        book_id,
-        duped_name,
-        parsed_info.kind,
-        0,
-    );
-
+pub fn init(
+    number: i64,
+    name: []u8,
+) Chapter {
     return .{
-        .name = duped_name,
-        .number = response.number,
+        .name = name,
+        .number = number,
         .is_read = false,
     };
 }
