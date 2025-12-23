@@ -17,6 +17,17 @@ pub fn build(b: *std.Build) void {
     });
     module.addImport("zqlite", zqlite.module("zqlite"));
 
+    const httpz = b.dependency("httpz", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("httpz", httpz.module("httpz"));
+    const zdt = b.dependency("zdt", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("zdt", zdt.module("zdt"));
+
     const exe = b.addExecutable(.{
         .name = "xylog",
         .root_module = module,

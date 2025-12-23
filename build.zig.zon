@@ -12,6 +12,14 @@
             .url = "git+https://github.com/karlseguin/zqlite.zig?ref=master#e041f81c6b11b7381b6358030d57ca95dcd54d30",
             .hash = "zqlite-0.0.0-RWLaYzS6mAAAzVSs8HPbmwl4DqH5kXG0Ob87asf1YNGL",
         },
+        .httpz = .{
+            .url = "git+https://github.com/karlseguin/http.zig?ref=master#1c0ec3751c53e276d5e0c42b6d5481e72d9d1971",
+            .hash = "httpz-0.0.0-PNVzrEktBwCzPoiua-S8LAYo2tILqczm3tSpneEzLQ9L",
+        },
+        .zdt = .{
+            .url = "git+https://codeberg.org/FObersteiner/zdt#6ca732a03578a13e1955e0d34747c365e381f45c",
+            .hash = "zdt-0.8.1-xr0_vAxUDwCJRDh9pcAS_mdZBIsvcGTtN-K8JJSWY4I6",
+        },
     },
 
     .paths = .{

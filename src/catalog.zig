@@ -1,5 +1,7 @@
 _dir: *std.fs.Dir,
 libraries: *std.ArrayList(Library),
+// RESEARCH: some applications just use per call timestamps?
+update_time: Datetime,
 
 pub const Catalog = @This();
 
@@ -13,9 +15,13 @@ pub fn init(
     const libraries = allocator.create(std.ArrayList(Library)) catch @panic("OOM");
     libraries.* = std.ArrayList(Library).empty;
 
+    const locale = try zdt.Timezone.tzLocal(allocator);
+    const now = try zdt.Datetime.now(.{ .tz = &locale });
+
     const catalog: Catalog = .{
         ._dir = dir,
         .libraries = libraries,
+        .update_time = now,
     };
 
     // always scan on initialization
@@ -65,6 +71,9 @@ pub fn deinit(self: *Catalog, allocator: Allocator) void {
 
 const Library = @import("catalog/library.zig");
 const Database = @import("database.zig");
+
+const Datetime = @import("zdt").Datetime;
+const zdt = @import("zdt");
 
 const Allocator = std.mem.Allocator;
 const std = @import("std");
