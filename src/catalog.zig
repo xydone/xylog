@@ -1,7 +1,10 @@
 _dir: *std.fs.Dir,
-libraries: *std.ArrayList(Library),
+libraries: *LibraryMap,
 // RESEARCH: some applications just use per call timestamps?
 update_time: Datetime,
+
+// library name -> library
+const LibraryMap = std.StringHashMap(Library);
 
 pub const Catalog = @This();
 
@@ -12,11 +15,10 @@ pub fn init(
 ) !Catalog {
     const dir = allocator.create(std.fs.Dir) catch @panic("OOM");
     dir.* = try std.fs.openDirAbsolute(absolute_path, .{ .iterate = true });
-    const libraries = allocator.create(std.ArrayList(Library)) catch @panic("OOM");
-    libraries.* = std.ArrayList(Library).empty;
+    const libraries = allocator.create(LibraryMap) catch @panic("OOM");
+    libraries.* = LibraryMap.init(allocator);
 
-    const locale = try zdt.Timezone.tzLocal(allocator);
-    const now = try zdt.Datetime.now(.{ .tz = &locale });
+    const now = try zdt.Datetime.now(null);
 
     const catalog: Catalog = .{
         ._dir = dir,
@@ -48,7 +50,8 @@ pub fn scan(
                     entry.name,
                     database,
                 );
-                catalog.libraries.append(allocator, library) catch @panic("OOM");
+                const duped_name = allocator.dupe(u8, entry.name) catch @panic("OOM");
+                catalog.libraries.put(duped_name, library) catch @panic("OOM");
             },
             else => {},
         }
@@ -56,15 +59,17 @@ pub fn scan(
 }
 
 pub fn deinit(self: *Catalog, allocator: Allocator) void {
+    var library_it = self.libraries.iterator();
     {
         self._dir.close();
         allocator.destroy(self._dir);
     }
     {
-        for (self.libraries.items) |*library| {
-            library.deinit(allocator);
+        while (library_it.next()) |entry| {
+            entry.value_ptr.deinit(allocator);
+            allocator.free(entry.key_ptr.*);
         }
-        self.libraries.deinit(allocator);
+        self.libraries.deinit();
         allocator.destroy(self.libraries);
     }
 }

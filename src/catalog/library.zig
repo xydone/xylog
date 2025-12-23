@@ -1,6 +1,8 @@
 _dir: std.fs.Dir,
-name: []const u8,
-books: *std.ArrayList(Book),
+books: *BookMap,
+
+// name -> book
+const BookMap = std.StringHashMap(Book);
 
 const Library = @This();
 
@@ -10,15 +12,12 @@ pub fn init(
     name: []const u8,
     database: Database,
 ) !Library {
-    const books = allocator.create(std.ArrayList(Book)) catch @panic("OOM");
-    books.* = std.ArrayList(Book).empty;
+    const books = allocator.create(BookMap) catch @panic("OOM");
+    books.* = BookMap.init(allocator);
 
-    const duped_name = allocator.dupe(u8, name) catch @panic("OOM");
-
-    const response = try Create.call(database, duped_name);
+    const response = try Create.call(database, name);
 
     const library: Library = .{
-        .name = duped_name,
         ._dir = dir,
         .books = books,
     };
@@ -47,7 +46,8 @@ pub fn scan(
                     database,
                     library_id,
                 );
-                self.books.append(allocator, book) catch @panic("OOM");
+                const duped_name = allocator.dupe(u8, entry.name) catch @panic("OOM");
+                self.books.put(duped_name, book) catch @panic("OOM");
             },
             else => {},
         }
@@ -55,11 +55,12 @@ pub fn scan(
 }
 
 pub fn deinit(self: Library, allocator: std.mem.Allocator) void {
-    allocator.free(self.name);
-    for (self.books.items) |*book| {
-        book.deinit(allocator);
+    var book_it = self.books.iterator();
+    while (book_it.next()) |entry| {
+        entry.value_ptr.deinit(allocator);
+        allocator.free(entry.key_ptr.*);
     }
-    self.books.deinit(allocator);
+    self.books.deinit();
     allocator.destroy(self.books);
 }
 

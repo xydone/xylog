@@ -1,7 +1,10 @@
 id: i64,
 _dir: std.fs.Dir,
 name: []const u8,
-chapters: *std.ArrayList(Chapter),
+chapters: *ChapterMap,
+
+// name -> chapter
+const ChapterMap = std.StringHashMap(Chapter);
 
 pub const Book = @This();
 
@@ -12,8 +15,8 @@ pub fn init(
     database: Database,
     library_id: i64,
 ) !Book {
-    const chapters = allocator.create(std.ArrayList(Chapter)) catch @panic("OOM");
-    chapters.* = std.ArrayList(Chapter).empty;
+    const chapters = allocator.create(ChapterMap) catch @panic("OOM");
+    chapters.* = ChapterMap.init(allocator);
 
     const duped_name = allocator.dupe(u8, name) catch @panic("OOM");
 
@@ -74,17 +77,18 @@ pub fn scan(self: Book, allocator: Allocator, database: Database) !void {
 
     for (responses, filenames.items) |res, filename| {
         const chapter = Chapter.init(res.number, filename);
-        try self.chapters.append(allocator, chapter);
+        try self.chapters.put(filename, chapter);
     }
 }
 
 pub fn deinit(self: Book, allocator: Allocator) void {
     allocator.free(self.name);
     {
-        for (self.chapters.items) |*chapter| {
+        var it = self.chapters.valueIterator();
+        while (it.next()) |chapter| {
             chapter.deinit(allocator);
         }
-        self.chapters.deinit(allocator);
+        self.chapters.deinit();
         allocator.destroy(self.chapters);
     }
 }

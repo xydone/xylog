@@ -2,8 +2,8 @@
 feed: Feed,
 
 pub const Feed = struct {
-    id: []const u8 = "root",
-    title: []const u8 = "Xylog OPDS catalog",
+    id: []const u8,
+    title: []const u8,
     updated: []const u8,
     author: Author,
     // OPDS Catalog Feed Documents should contain one atom:link element with a rel attribute value of self.
@@ -50,7 +50,7 @@ pub fn writeXML(self: @This(), writer: *std.Io.Writer) !void {
         try printElement(writer, "id", entry.id);
         try printElement(writer, "updated", entry.updated);
         try printElement(writer, "content type=\"text\"", entry.content);
-        try writer.print("<link rel=\"{s}\" href=\"{s}\" />", .{ entry.link.rel, entry.link.href });
+        try writer.print("<link rel=\"{s}\" href=\"{s}\" type=\"{s}\"/>", .{ entry.link.rel, entry.link.href, entry.link.type });
         try writer.writeAll("  </entry>");
     }
 
