@@ -1,18 +1,21 @@
 /// naming convention:
-/// <title> <c + <chapter> | v + <volume>
+/// <chapter title> | c<chapter number> | v<volume number>
 name: []const u8,
-number: i64,
+volume: i64,
+chapter: i64,
 is_read: bool,
 
 pub const Chapter = @This();
 
 pub fn init(
-    number: i64,
+    volume: i64,
+    chapter: i64,
     name: []u8,
 ) Chapter {
     return .{
         .name = name,
-        .number = number,
+        .chapter = chapter,
+        .volume = volume,
         .is_read = false,
     };
 }
@@ -23,64 +26,57 @@ pub fn deinit(self: Chapter, allocator: Allocator) void {
 
 pub const ParsedInfo = struct {
     title: []const u8,
-    kind: ChapterType,
-    number: i64,
-    excess: []const u8,
+    volume: i64,
+    chapter: i64,
 };
 
-pub fn parseName(full_name: []const u8) ParsedInfo {
-    const markers = [_]struct {
-        s: []const u8,
-        king: ChapterType,
-    }{
-        .{ .s = " c", .king = .chapter },
-        .{ .s = " v", .king = .volume },
-    };
-
-    var best_marker_idx: ?usize = null;
-    var kind: ?ChapterType = null;
-    var marker_len: usize = 0;
-
-    // searches for last occurance for "c" or "v"
-    for (markers) |m| {
-        if (std.mem.lastIndexOf(u8, full_name, m.s)) |idx| {
-            if (best_marker_idx == null or idx > best_marker_idx.?) {
-                best_marker_idx = idx;
-                kind = m.king;
-                marker_len = m.s.len;
-            }
-        }
-    }
-
-    const idx = best_marker_idx orelse {
-        return .{
-            .title = full_name,
-            .kind = .chapter,
-            .number = 0,
-            .excess = "",
-        };
-    };
-
-    const title = full_name[0..idx];
-    const after_marker = full_name[idx + marker_len ..];
-
-    var num_end: usize = 0;
-    while (num_end < after_marker.len and std.ascii.isDigit(after_marker[num_end])) : (num_end += 1) {}
-
-    const number_str = after_marker[0..num_end];
-    const excess = std.mem.trim(u8, after_marker[num_end..], " ");
-
-    const number = std.fmt.parseInt(i64, number_str, 10) catch 0;
+pub fn parseName(full_name: []const u8) !ParsedInfo {
+    var it = std.mem.splitScalar(u8, full_name, '|');
+    const title = std.mem.trim(u8, it.next() orelse return error.MissingTitle, " ");
+    const volume = std.mem.trim(u8, it.next() orelse return error.MissingVolume, " ");
+    const chapter = std.mem.trim(u8, it.next() orelse return error.MissingChapter, " ");
 
     return .{
         .title = title,
-        .kind = kind orelse .chapter,
-        .number = number,
-        .excess = excess,
+        .volume = try std.fmt.parseInt(i64, volume[1..], 10),
+        .chapter = try std.fmt.parseInt(i64, chapter[1..], 10),
     };
 }
 
-const ChapterType = @import("../types.zig").ChapterType;
+/// get total amount of pages in a chapter for archive based formats
+pub fn getPageAmount(file: *std.fs.File) !i64 {
+    var buffer: [1024]u8 = undefined;
+
+    var file_reader = file.reader(&buffer);
+    var zip_iterator = try std.zip.Iterator.init(&file_reader);
+
+    var name_buf: [1024]u8 = undefined;
+    var page_amount: u32 = 0;
+
+    while (try zip_iterator.next()) |entry| {
+        try file.seekTo(entry.header_zip_offset + @sizeOf(std.zip.CentralDirectoryFileHeader));
+        const filename = name_buf[0..entry.filename_len];
+        _ = try file.read(filename);
+        if (isImageFile(filename)) page_amount += 1;
+    }
+    return page_amount;
+}
+
+fn isImageFile(filename: []const u8) bool {
+    // TODO: is this enough?
+    const extensions = [_][]const u8{
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+    };
+    for (extensions) |ext| {
+        if (std.mem.endsWith(u8, filename, ext)) return true;
+        // Also check uppercase for older archives
+        if (std.mem.endsWith(u8, filename, ".JPG") or std.mem.endsWith(u8, filename, ".PNG")) return true;
+    }
+    return false;
+}
 
 const Create = @import("../database/chapter.zig").Create;
 const Database = @import("../database.zig");

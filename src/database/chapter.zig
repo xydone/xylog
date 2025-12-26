@@ -4,11 +4,12 @@ pub inline fn init(database: Database) !void {
         \\ id INTEGER PRIMARY KEY AUTOINCREMENT,
         \\ book_id INTEGER NOT NULL,
         \\ title TEXT NOT NULL,
-        \\ kind INTEGER NOT NULL,
-        \\ number INTEGER,
-        \\ is_read INTEGER DEFAULT 0,
-        \\ FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-        \\ UNIQUE(book_id, title, kind)
+        \\ volume INTEGER NOT NULL,
+        \\ chapter INTEGER NOT NULL,
+        \\ total_pages INTEGER NOT NULL,
+        \\ progress INTEGER NOT NULL DEFAULT 0,
+        \\ FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+        \\ UNIQUE(book_id, title, volume, chapter)
         \\);
     , .{});
 }
@@ -16,30 +17,27 @@ pub inline fn init(database: Database) !void {
 pub const Create = struct {
     const Response = struct {
         chapter_id: i64,
-        number: i64,
     };
 
     pub fn call(
         database: Database,
         book_id: i64,
         title: []const u8,
-        kind: ChapterType,
-        number: i32,
+        chapter: i32,
+        volume: i32,
+        total_pages: i64,
     ) !Response {
         const sql =
-            \\INSERT INTO chapters (book_id, title, kind, number) 
-            \\VALUES (?1, ?2, ?3, ?4)
+            \\INSERT INTO chapters (book_id, title, volume, chapter, total_pages) 
+            \\VALUES (?1, ?2, ?3, ?4, ?5)
             \\ON CONFLICT(book_id, title) DO UPDATE SET title=excluded.title
-            \\RETURNING id, is_read,number;
+            \\RETURNING id;
         ;
 
-        const kind_integer: i32 = @intFromEnum(kind);
-
-        if (try database.conn.row(sql, .{ book_id, title, kind_integer, number })) |row| {
+        if (try database.conn.row(sql, .{ book_id, title, volume, chapter, total_pages })) |row| {
             defer row.deinit();
             return .{
                 .chapter_id = row.int(0),
-                .number = row.int(3),
             };
         }
 
@@ -50,13 +48,13 @@ pub const Create = struct {
 pub const CreateMany = struct {
     pub const Entry = struct {
         file_name: []const u8,
-        kind: ChapterType,
-        number: i32,
+        volume: i64,
+        chapter: i64,
+        total_pages: i64,
     };
 
     const Response = struct {
         chapter_id: i64,
-        number: i64,
     };
     pub fn call(
         allocator: Allocator,
@@ -70,20 +68,17 @@ pub const CreateMany = struct {
         try database.conn.exec("BEGIN TRANSACTION", .{});
 
         const sql =
-            \\INSERT INTO chapters (book_id, title, kind, number) 
-            \\VALUES (?1, ?2, ?3, ?4)
-            \\ON CONFLICT(book_id, title, kind) DO UPDATE SET title=excluded.title
-            \\RETURNING id, is_read, number;
+            \\INSERT INTO chapters (book_id, title, volume, chapter, total_pages) 
+            \\VALUES (?1, ?2, ?3, ?4,?5)
+            \\ON CONFLICT(book_id, title, volume,chapter) DO UPDATE SET title=excluded.title
+            \\RETURNING id;
         ;
 
         for (entries, 0..) |entry, i| {
-            const kind_int: i32 = @intFromEnum(entry.kind);
-
-            if (try database.conn.row(sql, .{ book_id, entry.file_name, kind_int, entry.number })) |row| {
+            if (try database.conn.row(sql, .{ book_id, entry.file_name, entry.volume, entry.chapter, entry.total_pages })) |row| {
                 defer row.deinit();
                 results[i] = .{
                     .chapter_id = row.int(0),
-                    .number = row.int(2),
                 };
             } else {
                 try database.conn.exec("ROLLBACK", .{});
@@ -97,7 +92,6 @@ pub const CreateMany = struct {
     }
 };
 
-const ChapterType = @import("../types.zig").ChapterType;
 const Database = @import("../database.zig");
 
 const Allocator = std.mem.Allocator;

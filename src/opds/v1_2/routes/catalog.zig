@@ -97,15 +97,15 @@ const GetCatalog = Endpoint(struct {
                     const book_address = try std.fmt.allocPrint(allocator, "{s}/{s}/{s}", .{
                         opds_address,
                         req.params.library,
-                        book.name,
+                        book.*.name,
                     });
 
                     try entries.append(
                         allocator,
                         .{
-                            .title = book.name,
+                            .title = book.*.name,
                             .updated = date_writer.written(),
-                            .id = book.name,
+                            .id = book.*.name,
                             .content = "",
                             .link = .{
                                 .rel = "subsection",
@@ -202,7 +202,7 @@ const GetBook = Endpoint(struct {
             const book = library.books.get(req.params.book) orelse return error.NoBook;
             var chapter_it = book.chapters.valueIterator();
             while (chapter_it.next()) |chapter| {
-                const encoded_chapter_name = std.Uri.Component{ .raw = chapter.name };
+                const encoded_chapter_name = std.Uri.Component{ .raw = chapter.*.name };
                 // WARNING: this leaks in a non arena allocator!
                 const book_address = try std.fmt.allocPrint(allocator, "{s}/{s}/{s}/{f}", .{
                     opds_address,
@@ -211,8 +211,8 @@ const GetBook = Endpoint(struct {
                     std.fmt.alt(encoded_chapter_name, .formatEscaped),
                 });
                 try entries.append(allocator, .{
-                    .title = chapter.name,
-                    .id = chapter.name,
+                    .title = chapter.*.name,
+                    .id = chapter.*.name,
                     .updated = date_writer.written(),
                     .content = "",
                     .link = .{

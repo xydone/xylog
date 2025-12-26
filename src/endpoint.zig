@@ -40,22 +40,22 @@ pub fn Endpoint(
                     router.*.post(path, call, .{});
                 },
                 .PATCH => {
-                    router.*.post(path, call, .{});
+                    router.*.patch(path, call, .{});
                 },
                 .PUT => {
-                    router.*.post(path, call, .{});
+                    router.*.put(path, call, .{});
                 },
                 .OPTIONS => {
-                    router.*.post(path, call, .{});
+                    router.*.options(path, call, .{});
                 },
                 .CONNECT => {
-                    router.*.post(path, call, .{});
+                    router.*.connect(path, call, .{});
                 },
                 .DELETE => {
-                    router.*.post(path, call, .{});
+                    router.*.delete(path, call, .{});
                 },
                 .HEAD => {
-                    router.*.post(path, call, .{});
+                    router.*.head(path, call, .{});
                 },
                 // NOTE: http.zig supports non-standard http methods. For now, creating routes with a non-standard method is not supported.
                 .OTHER => {
@@ -191,7 +191,10 @@ pub const ResponseError = struct {
         .code = 401,
         .message = "You are not authorized to make this request.",
     };
-
+    pub const forbidden: ResponseError = .{
+        .code = 403,
+        .message = "Forbidden.",
+    };
     pub const not_found: ResponseError = .{
         .code = 404,
         .message = "Not found.",

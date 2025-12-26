@@ -10,7 +10,7 @@ pub fn main() !void {
     };
 
     defer if (is_debug) {
-        _ = debug_allocator.deinit();
+        // _ = debug_allocator.deinit();
     };
 
     var config = try Config.init(allocator);
@@ -38,12 +38,14 @@ pub fn main() !void {
     const router = try server.router(.{});
 
     OPDS.init(router);
+    Sync.init(router);
 
     log.info("Listening on http://{s}:{d}/", .{ config.address, config.port });
     try server.listen();
 }
 
 const OPDS = @import("opds/routes.zig");
+const Sync = @import("sync/routes.zig");
 
 const Catalog = @import("catalog.zig");
 const Database = @import("database.zig");
