@@ -19,7 +19,7 @@ pub fn main() !void {
     var database = try Database.init(allocator, config.state_dir);
     defer database.deinit();
 
-    var catalog = try Catalog.init(config.catalog_dir, allocator, database);
+    var catalog = try Catalog.init(config, allocator, database);
     defer catalog.deinit(allocator);
 
     var handler: Handler = .{

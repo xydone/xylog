@@ -1,3 +1,5 @@
+id: i64,
+name: []const u8,
 _dir: std.fs.Dir,
 books: *BookMap,
 // INFO: design decision explanation:
@@ -29,6 +31,8 @@ pub fn init(
     const response = try Create.call(database, name);
 
     const library: Library = .{
+        .id = response.library_id,
+        .name = name,
         ._dir = dir,
         .books = books,
         .hash_to_chapter = hash_to_chapter,
@@ -37,6 +41,48 @@ pub fn init(
     try library.scan(allocator, database, response.library_id);
 
     return library;
+}
+
+pub fn initFromDatabase(allocator: Allocator, catalog_dir: *std.fs.Dir, database: Database) ![]Library {
+    const library_responses = try GetAll.call(allocator, database);
+    defer {
+        for (library_responses) |r| r.deinit(allocator);
+        allocator.free(library_responses);
+    }
+
+    var library_lookup_table = std.AutoHashMap(i64, *Library).init(allocator);
+    defer library_lookup_table.deinit();
+
+    const libraries = try allocator.alloc(Library, library_responses.len);
+    errdefer allocator.free(libraries);
+
+    for (library_responses, 0..) |res, i| {
+        const books = allocator.create(BookMap) catch @panic("OOM");
+        books.* = BookMap.init(allocator);
+
+        const hash_to_chapter = allocator.create(HashToChapterMap) catch @panic("OOM");
+        hash_to_chapter.* = HashToChapterMap.init(allocator);
+
+        libraries[i] = .{
+            .id = res.id,
+            .name = try allocator.dupe(u8, res.name),
+            ._dir = try catalog_dir.openDir(res.name, .{ .iterate = true }),
+            .books = books,
+            .hash_to_chapter = hash_to_chapter,
+        };
+        try library_lookup_table.put(res.id, &libraries[i]);
+    }
+
+    const book_lookup_table = try Book.initManyFromDatabase(allocator, database, library_lookup_table);
+
+    try Chapter.initFromDatabase(
+        allocator,
+        database,
+        &library_lookup_table,
+        book_lookup_table,
+    );
+
+    return libraries;
 }
 
 pub fn scan(
@@ -81,8 +127,6 @@ pub fn deinit(self: Library, allocator: std.mem.Allocator) void {
     while (book_it.next()) |entry| {
         defer allocator.destroy(entry.value_ptr.*);
         entry.value_ptr.*.deinit(allocator);
-        // free the name
-        allocator.free(entry.key_ptr.*);
     }
     var hash_to_chapter_it = self.hash_to_chapter.keyIterator();
     while (hash_to_chapter_it.next()) |hash| {
@@ -98,6 +142,7 @@ pub fn getChapterByHash(self: Library, hash: []const u8) !*Chapter {
 
 const hashFile = @import("../sync/koreader/util.zig").partialMd5;
 
+const GetAll = @import("../database/library.zig").GetAll;
 const Create = @import("../database/library.zig").Create;
 const Database = @import("../database.zig");
 

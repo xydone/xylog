@@ -1,23 +1,65 @@
+id: i64,
 /// naming convention:
 /// <chapter title> | c<chapter number> | v<volume number>
 name: []const u8,
 volume: i64,
 chapter: i64,
-is_read: bool,
+/// represents the latest read chapter
+progress: i64,
+total_pages: i64,
 
 pub const Chapter = @This();
 
 pub fn init(
+    id: i64,
     volume: i64,
     chapter: i64,
     name: []u8,
+    total_pages: i64,
 ) Chapter {
     return .{
+        .id = id,
         .name = name,
         .chapter = chapter,
         .volume = volume,
-        .is_read = false,
+        .progress = 0,
+        .total_pages = total_pages,
     };
+}
+
+pub fn initFromDatabase(
+    allocator: Allocator,
+    database: Database,
+    library_lookup_table: *std.AutoHashMap(i64, *Library),
+    book_lookup_table: *std.AutoHashMap(i64, *Book),
+) !void {
+
+    // NOTE: deinit() is not called on the records here, despite allocations being made, as the ownership is passed on further down the code.
+    const chapter_records = try GetAll.call(allocator, database);
+    defer allocator.free(chapter_records);
+
+    for (chapter_records) |record| {
+        const target_book = book_lookup_table.get(record.book_id) orelse continue;
+        const target_lib = library_lookup_table.get(record.library_id) orelse continue;
+
+        const chapter = allocator.create(Chapter) catch @panic("OOM");
+
+        chapter.* = .{
+            .id = record.id,
+            .name = record.title,
+            .volume = record.volume,
+            .chapter = record.chapter,
+            .progress = record.progress,
+            .total_pages = record.total_pages,
+        };
+
+        try target_book.chapters.put(record.title, chapter);
+
+        try target_lib.hash_to_chapter.put(record.hash, .{
+            .book = target_book,
+            .chapter_name = record.title,
+        });
+    }
 }
 
 pub fn deinit(self: Chapter, allocator: Allocator) void {
@@ -72,14 +114,23 @@ fn isImageFile(filename: []const u8) bool {
     };
     for (extensions) |ext| {
         if (std.mem.endsWith(u8, filename, ext)) return true;
-        // Also check uppercase for older archives
-        if (std.mem.endsWith(u8, filename, ".JPG") or std.mem.endsWith(u8, filename, ".PNG")) return true;
     }
     return false;
 }
 
+pub fn updateProgress(self: *Chapter, database: Database, chapter_number: i64) void {
+    try UpdateProgressDB.call(database, self.id, chapter_number);
+
+    self.progress = chapter_number;
+}
+
+const UpdateProgressDB = @import("../database/chapter.zig").UpdateProgress;
+const GetAll = @import("../database/chapter.zig").GetAll;
 const Create = @import("../database/chapter.zig").Create;
 const Database = @import("../database.zig");
+
+const Library = @import("library.zig");
+const Book = @import("book.zig");
 
 const Allocator = std.mem.Allocator;
 const std = @import("std");

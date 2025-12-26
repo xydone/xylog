@@ -9,12 +9,12 @@ const LibraryMap = std.StringHashMap(Library);
 pub const Catalog = @This();
 
 pub fn init(
-    absolute_path: []const u8,
+    config: Config,
     allocator: Allocator,
     database: Database,
 ) !Catalog {
     const dir = allocator.create(std.fs.Dir) catch @panic("OOM");
-    dir.* = try std.fs.openDirAbsolute(absolute_path, .{ .iterate = true });
+    dir.* = try std.fs.openDirAbsolute(config.catalog_dir, .{ .iterate = true });
     const libraries = allocator.create(LibraryMap) catch @panic("OOM");
     libraries.* = LibraryMap.init(allocator);
 
@@ -26,11 +26,14 @@ pub fn init(
         .update_time = now,
     };
 
-    // always scan on initialization
-    try catalog.scan(
-        allocator,
-        database,
-    );
+    if (config.scan_on_start) {
+        try catalog.scan(
+            allocator,
+            database,
+        );
+    } else {
+        try catalog.initFromDatabase(allocator, database);
+    }
     return catalog;
 }
 
@@ -58,6 +61,13 @@ pub fn scan(
     }
 }
 
+pub fn initFromDatabase(catalog: Catalog, allocator: Allocator, database: Database) !void {
+    const libraries = try Library.initFromDatabase(allocator, catalog._dir, database);
+    for (libraries) |library| {
+        try catalog.libraries.put(library.name, library);
+    }
+}
+
 pub fn deinit(self: *Catalog, allocator: Allocator) void {
     var library_it = self.libraries.iterator();
     {
@@ -75,6 +85,7 @@ pub fn deinit(self: *Catalog, allocator: Allocator) void {
 }
 
 const Library = @import("catalog/library.zig");
+const Config = @import("config/config.zig");
 const Database = @import("database.zig");
 
 const Datetime = @import("zdt").Datetime;
