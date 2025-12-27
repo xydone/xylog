@@ -100,7 +100,6 @@ const UpdateProgress = Endpoint(struct {
     }
 });
 
-// BUG: currently, for some reason, while the http request is successful and a book is found, koreader refuses to accept it.
 const GetProgress = Endpoint(struct {
     const Params = struct { document: []const u8 };
     const Response = struct {
@@ -134,14 +133,18 @@ const GetProgress = Endpoint(struct {
                 const progress_float: f32 = @floatFromInt(chapter.progress);
                 break :blk progress_float / total_pages_float;
             };
-            try res.json(Response{
+
+            // tracking issue: https://github.com/koreader/koreader/issues/14596
+            const json_formatter = std.json.fmt(Response{
                 .progress = progress,
                 .document = req.params.document,
                 .percentage = percentage,
                 .device = null,
                 .device_id = null,
             }, .{});
+            try json_formatter.format(&res.buffer.writer);
 
+            res.header("Content-Type", "application/json");
             res.status = 200;
             return;
         }
