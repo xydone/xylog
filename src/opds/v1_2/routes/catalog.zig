@@ -88,8 +88,10 @@ const GetCatalog = Endpoint(struct {
                     );
                 }
             } else {
-                //TODO: handle missing library
-                const library = ctx.catalog.libraries.get(req.params.library) orelse return error.NoLibrary;
+                const library = ctx.catalog.libraries.get(req.params.library) orelse {
+                    handleResponse(res, .not_found, "Library not found!");
+                    return;
+                };
                 // handle cases in which the catalog is not requested as cases in which the library itself is requested.
                 var book_it = library.books.valueIterator();
                 while (book_it.next()) |book| {
@@ -196,10 +198,14 @@ const GetBook = Endpoint(struct {
         defer entries.deinit(allocator);
 
         const catalog: Catalog = blk: {
-            // TODO: handle no library
-            const library = ctx.catalog.libraries.get(req.params.library) orelse return error.NoLibrary;
-            // TODO: handle no book
-            const book = library.books.get(req.params.book) orelse return error.NoBook;
+            const library = ctx.catalog.libraries.get(req.params.library) orelse {
+                handleResponse(res, .not_found, "Library not found!");
+                return;
+            };
+            const book = library.books.get(req.params.book) orelse {
+                handleResponse(res, .not_found, "Library not found!");
+                return;
+            };
             var chapter_it = book.chapters.valueIterator();
             while (chapter_it.next()) |chapter| {
                 const encoded_chapter_name = std.Uri.Component{ .raw = chapter.*.name };
@@ -297,6 +303,7 @@ const Catalog = @import("../catalog.zig");
 const Endpoint = @import("../../../endpoint.zig").Endpoint;
 const EndpointRequest = @import("../../../endpoint.zig").EndpointRequest;
 const EndpointData = @import("../../../endpoint.zig").EndpointData;
+const handleResponse = @import("../../../endpoint.zig").handleResponse;
 
 const Handler = @import("../../../handler.zig");
 
