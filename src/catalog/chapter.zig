@@ -118,7 +118,7 @@ fn isImageFile(filename: []const u8) bool {
     return false;
 }
 
-pub fn updateProgress(self: *Chapter, database: Database, chapter_number: i64) void {
+pub fn updateProgress(self: *Chapter, database: Database, chapter_number: i64) !void {
     try UpdateProgressDB.call(database, self.id, chapter_number);
 
     self.progress = chapter_number;

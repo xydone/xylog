@@ -1,5 +1,6 @@
 catalog: *Catalog,
 config: *Config,
+database: *Database,
 
 const Handler = @This();
 const log = std.log.scoped(.handler);
@@ -9,6 +10,7 @@ pub const Router = httpz.Router(*Handler, *const fn (*Handler.RequestContext, *h
 pub const RequestContext = struct {
     catalog: *Catalog,
     config: *Config,
+    database: *Database,
 };
 
 pub fn dispatch(self: *Handler, action: httpz.Action(*RequestContext), req: *httpz.Request, res: *httpz.Response) !void {
@@ -17,6 +19,7 @@ pub fn dispatch(self: *Handler, action: httpz.Action(*RequestContext), req: *htt
     var ctx = RequestContext{
         .catalog = self.catalog,
         .config = self.config,
+        .database = self.database,
     };
 
     try action(&ctx, req, res);
@@ -71,6 +74,7 @@ const Logging = struct {
 };
 
 const Catalog = @import("catalog.zig");
+const Database = @import("database.zig");
 const Config = @import("config/config.zig");
 
 const types = @import("types.zig");

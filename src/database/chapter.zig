@@ -168,7 +168,7 @@ pub const GetAll = struct {
 };
 
 pub const UpdateProgress = struct {
-    pub fn call(database: Database, chapter_id: i64, progress: i32) !void {
+    pub fn call(database: Database, chapter_id: i64, progress: i64) !void {
         try database.conn.exec(SQL_STRING, .{ progress, chapter_id });
     }
     const SQL_STRING = "UPDATE chapters SET progress = ?1 WHERE id = ?2";

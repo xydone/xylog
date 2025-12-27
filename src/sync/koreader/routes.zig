@@ -73,44 +73,81 @@ const UpdateProgress = Endpoint(struct {
     };
 
     pub fn call(ctx: *Handler.RequestContext, req: EndpointRequest(Body, void, void), res: *httpz.Response) anyerror!void {
-        // const allocator = res.arena;
-        std.debug.print("document: {s}\n", .{req.body.document});
-        std.debug.print("progress: {s}\n", .{req.body.progress});
-        std.debug.print("percentage: {}\n", .{req.body.percentage});
-        std.debug.print("device: {s}\n", .{req.body.device});
-        std.debug.print("device id: {s}\n", .{req.body.device_id});
         // TODO: look into storing all books across all libraries globally instead?
         var library_it = ctx.catalog.libraries.valueIterator();
         while (library_it.next()) |library| {
-            // TODO: handle missing books gracefully
-            const book = library.getChapterByHash(req.body.document) catch |err| {
-                std.debug.print("err: {}\n", .{err});
-                return error.NotFound;
+            const chapter = library.getChapterByHash(req.body.document) catch {
+                handleResponse(res, .not_found, "Chapter not found!");
+                return;
             };
-            std.debug.print("book: {s}\n", .{book.name});
+            const chapter_number = std.fmt.parseInt(i64, req.body.progress, 10) catch {
+                std.debug.print("Received progress of {s} when assuming it is a number\n", .{req.body.progress});
+                var buf: [1024]u8 = undefined;
+                const details: ?[]u8 = std.fmt.bufPrint(&buf, "Received progress of {s} when assuming it is a number", .{req.body.progress}) catch blk: {
+                    break :blk null;
+                };
+
+                handleResponse(res, .bad_request, details);
+                return;
+            };
+            chapter.updateProgress(ctx.database.*, chapter_number) catch {
+                handleResponse(res, .internal_server_error, "Failed to update progress!");
+                return;
+            };
             break;
         }
-        _ = res;
+        res.status = 200;
     }
 });
 
+// BUG: currently, for some reason, while the http request is successful and a book is found, koreader refuses to accept it.
 const GetProgress = Endpoint(struct {
     const Params = struct { document: []const u8 };
+    const Response = struct {
+        progress: []const u8,
+        document: []const u8,
+
+        percentage: ?f32,
+        device: ?[]const u8,
+        device_id: ?[]const u8,
+    };
 
     pub const endpoint_data: EndpointData = .{
         .Request = .{
             .Params = Params,
         },
-        .Response = void,
+        .Response = Response,
         .method = .GET,
         .path = "/koreader/syncs/progress/:document",
     };
 
     pub fn call(ctx: *Handler.RequestContext, req: EndpointRequest(void, Params, void), res: *httpz.Response) anyerror!void {
-        _ = ctx;
-        _ = req;
-        _ = res;
-        @panic("not implemented!");
+        // TODO: look into storing all books across all libraries globally instead?
+        var library_it = ctx.catalog.libraries.valueIterator();
+        while (library_it.next()) |library| {
+            const chapter = library.getChapterByHash(req.params.document) catch continue;
+            var buf: [16]u8 = undefined;
+            const progress = try std.fmt.bufPrint(&buf, "{}", .{chapter.progress});
+
+            const percentage: f32 = blk: {
+                const total_pages_float: f32 = @floatFromInt(chapter.total_pages);
+                const progress_float: f32 = @floatFromInt(chapter.progress);
+                break :blk progress_float / total_pages_float;
+            };
+            try res.json(Response{
+                .progress = progress,
+                .document = req.params.document,
+                .percentage = percentage,
+                .device = null,
+                .device_id = null,
+            }, .{});
+
+            res.status = 200;
+            return;
+        }
+
+        handleResponse(res, .not_found, "Chapter not found!");
+        return;
     }
 });
 

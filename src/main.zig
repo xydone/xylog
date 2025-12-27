@@ -25,6 +25,7 @@ pub fn main() !void {
     var handler: Handler = .{
         .catalog = &catalog,
         .config = &config,
+        .database = &database,
     };
     var server = try httpz.Server(*Handler).init(allocator, .{
         .port = config.port,
