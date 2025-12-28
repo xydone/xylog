@@ -33,7 +33,8 @@ pub fn build(b: *std.Build) void {
         .root_module = module,
     });
 
-    exe.addCSourceFile(.{
+    // sqlite
+    module.addCSourceFile(.{
         .file = b.path("lib/sqlite/sqlite3.c"),
         .flags = &[_][]const u8{
             "-DSQLITE_DQS=0",
@@ -54,6 +55,12 @@ pub fn build(b: *std.Build) void {
             "-DHAVE_USLEEP=0",
         },
     });
+    // module.linkSystemLibrary("zip", .{});
+    const bzip_dependency = b.dependency("libzip", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    module.linkLibrary(bzip_dependency.artifact("zip"));
     exe.linkLibC();
 
     b.installArtifact(exe);

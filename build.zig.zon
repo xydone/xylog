@@ -20,6 +20,10 @@
             .url = "git+https://codeberg.org/FObersteiner/zdt#6ca732a03578a13e1955e0d34747c365e381f45c",
             .hash = "zdt-0.8.1-xr0_vAxUDwCJRDh9pcAS_mdZBIsvcGTtN-K8JJSWY4I6",
         },
+        .libzip = .{
+            .url = "git+https://github.com/sashka/libzip#fd3051f719aee93872a55f554b0b3fc5270aab21",
+            .hash = "libzip-1.11.2-WX_L8EQ4AAC9YSQ1dhuNALqIuIPgZNkBdjQ0Ki7wC_W3",
+        },
     },
 
     .paths = .{

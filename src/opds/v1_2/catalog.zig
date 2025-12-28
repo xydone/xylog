@@ -57,16 +57,10 @@ pub fn writeXML(self: @This(), writer: *std.Io.Writer) !void {
     try writer.writeAll("</feed>");
 }
 
-fn printElement(writer: *std.Io.Writer, tag: []const u8, value: []const u8) !void {
-    try writer.print("<{s}>", .{tag});
-    try writer.writeAll(value);
-    const tagName = if (std.mem.indexOf(u8, tag, " ")) |idx| tag[0..idx] else tag;
-    try writer.print("</{s}>", .{tagName});
-}
-
 const Catalog = @import("../../catalog.zig");
 const Config = @import("../../config/config.zig");
 
+const printElement = @import("types.zig").XML.printElement;
 const Link = @import("types.zig").Link;
 
 const Allocator = std.mem.Allocator;
