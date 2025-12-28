@@ -7,6 +7,7 @@ update_time: Datetime,
 const LibraryMap = std.StringHashMap(Library);
 
 pub const Catalog = @This();
+const log = std.log.scoped(.catalog);
 
 pub fn init(
     config: Config,
@@ -26,7 +27,9 @@ pub fn init(
         .update_time = now,
     };
 
-    if (config.scan_on_start) {
+    // always scan if the database was previously uninitialized
+    // and if the user has configured it that way
+    if (config.scan_on_start or database.is_first_time_initializing == true) {
         try catalog.scan(
             allocator,
             database,
@@ -42,6 +45,7 @@ pub fn scan(
     allocator: Allocator,
     database: Database,
 ) !void {
+    log.debug("Scanning catalog from disk...", .{});
     var it = catalog._dir.iterate();
     while (try it.next()) |entry| {
         switch (entry.kind) {
@@ -59,13 +63,16 @@ pub fn scan(
             else => {},
         }
     }
+    log.debug("Catalog disk scan complete!", .{});
 }
 
 pub fn initFromDatabase(catalog: Catalog, allocator: Allocator, database: Database) !void {
+    log.debug("Scanning catalog from database...", .{});
     const libraries = try Library.initFromDatabase(allocator, catalog._dir, database);
     for (libraries) |library| {
         try catalog.libraries.put(library.name, library);
     }
+    log.debug("Catalog database scan complete!", .{});
 }
 
 pub fn deinit(self: *Catalog, allocator: Allocator) void {
