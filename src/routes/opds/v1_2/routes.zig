@@ -4,6 +4,6 @@ pub inline fn init(router: *Handler.Router) void {
 
 const Catalog = @import("routes/catalog.zig");
 
-const Handler = @import("../../handler.zig");
+const Handler = @import("../../../handler.zig");
 
 const httpz = @import("httpz");

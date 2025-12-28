@@ -580,18 +580,18 @@ const GetMultiDownload = Endpoint(struct {
     }
 });
 
-const Chapter = @import("../../../catalog/chapter.zig");
+const Chapter = @import("../../../../catalog/chapter.zig");
 
 const OpenSearchDescription = @import("../types.zig").OpenSearchDescription;
 const Link = @import("../types.zig").Link;
 const Catalog = @import("../catalog.zig");
 
-const Endpoint = @import("../../../endpoint.zig").Endpoint;
-const EndpointRequest = @import("../../../endpoint.zig").EndpointRequest;
-const EndpointData = @import("../../../endpoint.zig").EndpointData;
-const handleResponse = @import("../../../endpoint.zig").handleResponse;
+const Endpoint = @import("../../../../endpoint.zig").Endpoint;
+const EndpointRequest = @import("../../../../endpoint.zig").EndpointRequest;
+const EndpointData = @import("../../../../endpoint.zig").EndpointData;
+const handleResponse = @import("../../../../endpoint.zig").handleResponse;
 
-const Handler = @import("../../../handler.zig");
+const Handler = @import("../../../../handler.zig");
 
 const zip = @cImport({
     @cInclude("zip.h");

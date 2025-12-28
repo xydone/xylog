@@ -140,7 +140,7 @@ pub fn getChapterByHash(self: Library, hash: []const u8) !*Chapter {
     return result.book.chapters.get(result.chapter_name) orelse return error.ChapterNotFound;
 }
 
-const hashFile = @import("../sync/koreader/util.zig").partialMd5;
+const hashFile = @import("../routes/kosync/util.zig").partialMd5;
 
 const GetAll = @import("../database/library.zig").GetAll;
 const Create = @import("../database/library.zig").Create;

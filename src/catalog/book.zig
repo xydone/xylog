@@ -169,7 +169,7 @@ pub fn deinit(self: Book, allocator: Allocator) void {
     }
 }
 
-const hashFile = @import("../sync/koreader/util.zig").partialMd5;
+const hashFile = @import("../routes/kosync/util.zig").partialMd5;
 
 const Chapter = @import("chapter.zig");
 const Library = @import("library.zig");

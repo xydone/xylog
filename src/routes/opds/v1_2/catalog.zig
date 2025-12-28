@@ -57,8 +57,8 @@ pub fn writeXML(self: @This(), writer: *std.Io.Writer) !void {
     try writer.writeAll("</feed>");
 }
 
-const Catalog = @import("../../catalog.zig");
-const Config = @import("../../config/config.zig");
+const Catalog = @import("../../../catalog.zig");
+const Config = @import("../../../config/config.zig");
 
 const printElement = @import("types.zig").XML.printElement;
 const Link = @import("types.zig").Link;
