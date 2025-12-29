@@ -1,0 +1,20 @@
+.{
+    // this is where the database will be stored.
+    // it is a required field and no default is provided.
+    .state_dir = null,
+
+    // this is where the books will be stored
+    // it is a required field and no default is provided.
+    .catalog_dir = null,
+
+    // this is the address which will be used by applications to access xylog.
+    .address = "127.0.0.1",
+
+    // this is the port which will be used by applications to access xylog.
+    .port = 4499,
+
+    // if true, xylog will scan the entire state directory on start every time, ignoring the database.
+    // if false, xylog will take the data from the database without scanning for updates.
+    // NOTE: if the database does not exist, then this field is ignored and the library is scanned.
+    .scan_on_start = false,
+}
