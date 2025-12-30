@@ -22,11 +22,13 @@ pub fn main() !void {
     var catalog = try Catalog.init(config, allocator, database);
     defer catalog.deinit(allocator);
 
-    var handler: Handler = .{
+    var handler = try Handler.init(allocator, .{
         .catalog = &catalog,
         .config = &config,
         .database = &database,
-    };
+    });
+    defer handler.deinit(allocator);
+
     var server = try httpz.Server(*Handler).init(allocator, .{
         .port = config.port,
         .address = config.address,

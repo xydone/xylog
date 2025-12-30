@@ -34,6 +34,9 @@ pub fn init(allocator: Allocator, state_dir: []const u8) !Database {
     try Library.init(database);
     try Book.init(database);
     try Chapter.init(database);
+    try TrackersAPIKeys.init(database);
+    try User.init(database);
+    try APIKeys.init(database);
 
     return database;
 }
@@ -45,6 +48,9 @@ pub fn deinit(self: *Database) void {
 const Library = @import("database/library.zig");
 const Book = @import("database/book.zig");
 const Chapter = @import("database/chapter.zig");
+const TrackersAPIKeys = @import("database/trackers_api_keys.zig");
+const APIKeys = @import("database/api_keys.zig");
+const User = @import("database/user.zig");
 
 const zqlite = @import("zqlite");
 

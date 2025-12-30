@@ -17,4 +17,9 @@
     // if false, xylog will take the data from the database without scanning for updates.
     // NOTE: if the database does not exist, then this field is ignored and the library is scanned.
     .scan_on_start = false,
+
+    // secret string that will be used to encrypt secrets on the database, such as the API keys for trackers.
+    // it is a required field and no default is provided.
+    // NOTE: this can be done by executing `openssl rand -hex 32` in a terminal and copying the output.
+    .encryption_secret = null,
 }

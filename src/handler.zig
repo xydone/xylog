@@ -1,31 +1,83 @@
 catalog: *Catalog,
 config: *Config,
 database: *Database,
+one_time_token_map: *OneTimeTokenMap,
 
 const Handler = @This();
+
+/// one time, short lived token -> user id
+///
+/// meant to be used with tracker authentication which requires a callback url
+pub const OneTimeTokenMap = std.StringHashMap(i64);
+
+pub fn init(allocator: Allocator, parameters: struct {
+    catalog: *Catalog,
+    config: *Config,
+    database: *Database,
+}) !Handler {
+    const one_time_token_map = try allocator.create(OneTimeTokenMap);
+    one_time_token_map.* = OneTimeTokenMap.init(allocator);
+    return .{
+        .catalog = parameters.catalog,
+        .config = parameters.config,
+        .database = parameters.database,
+        .one_time_token_map = one_time_token_map,
+    };
+}
+
+pub fn deinit(self: *Handler, allocator: Allocator) void {
+    {
+        defer allocator.destroy(self.one_time_token_map);
+        var it = self.one_time_token_map.keyIterator();
+        while (it.next()) |token| {
+            allocator.free(token.*);
+        }
+        self.one_time_token_map.deinit();
+    }
+}
+
 const log = std.log.scoped(.handler);
 
 pub const Router = httpz.Router(*Handler, *const fn (*Handler.RequestContext, *httpz.request.Request, *httpz.response.Response) anyerror!void);
 
+pub const RouteData = struct {
+    restricted: bool = false,
+};
+
 pub const RequestContext = struct {
+    user_id: ?i64,
     catalog: *Catalog,
     config: *Config,
     database: *Database,
+    one_time_token_map: *OneTimeTokenMap,
 };
 
 pub fn dispatch(self: *Handler, action: httpz.Action(*RequestContext), req: *httpz.Request, res: *httpz.Response) !void {
+    const allocator = req.arena;
     var timer = try std.time.Timer.start();
 
     var ctx = RequestContext{
+        .user_id = null,
         .catalog = self.catalog,
         .config = self.config,
         .database = self.database,
+        .one_time_token_map = self.one_time_token_map,
+    };
+
+    authenticateRequest(allocator, &ctx, req, res) catch {
+        return try Logging.print(Logging{
+            .allocator = allocator,
+            .req = req.*,
+            .res = res.*,
+            .timer = &timer,
+            .url_path = req.url.path,
+        });
     };
 
     try action(&ctx, req, res);
 
     try Logging.print(Logging{
-        .allocator = req.arena,
+        .allocator = allocator,
         .req = req.*,
         .res = res.*,
         .timer = &timer,
@@ -33,7 +85,28 @@ pub fn dispatch(self: *Handler, action: httpz.Action(*RequestContext), req: *htt
     });
 }
 
-const zdt = @import("zdt");
+fn authenticateRequest(allocator: Allocator, ctx: *RequestContext, req: *httpz.Request, res: *httpz.Response) !void {
+    const api_key = req.header("x-api-key");
+    if (req.route_data) |rd| {
+        const route_data: *const RouteData = @ptrCast(@alignCast(rd));
+        if (route_data.restricted) {
+            if (api_key) |key| {
+                verifyAPIKey(allocator, ctx, key) catch {
+                    handleResponse(res, .unauthorized, "Permission denied!");
+                    return error.AuthenticationFailed;
+                };
+            } else {
+                handleResponse(res, .unauthorized, "Permission denied!");
+                return error.AuthenticationFailed;
+            }
+        }
+    }
+}
+
+fn verifyAPIKey(allocator: Allocator, ctx: *RequestContext, api_key: []const u8) error{CannotGet}!void {
+    const response = GetByAPIKey.call(allocator, ctx.database.*, api_key) catch return error.CannotGet;
+    ctx.user_id = response.id;
+}
 
 const Logging = struct {
     allocator: std.mem.Allocator,
@@ -73,12 +146,18 @@ const Logging = struct {
     }
 };
 
+const GetByAPIKey = @import("database/user.zig").GetByAPIKey;
+
+const handleResponse = @import("endpoint.zig").handleResponse;
+
+const Auth = @import("auth/util.zig");
 const Catalog = @import("catalog.zig");
 const Database = @import("database.zig");
 const Config = @import("config/config.zig");
 
 const types = @import("types.zig");
 
+const zdt = @import("zdt");
 const httpz = @import("httpz");
 
 const Allocator = std.mem.Allocator;

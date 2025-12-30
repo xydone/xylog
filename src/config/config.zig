@@ -6,6 +6,7 @@ port: u16,
 address: []const u8,
 /// automatic library scanning on server start
 scan_on_start: bool = true,
+encryption_secret: [32]u8,
 
 const path = "config/config.zon";
 const log = std.log.scoped(.config);
@@ -22,6 +23,7 @@ const ConfigFile = struct {
     port: u16,
     address: []const u8,
     scan_on_start: bool = true,
+    encryption_secret: ?[]const u8,
 };
 
 pub const InitErrors = error{
@@ -30,6 +32,8 @@ pub const InitErrors = error{
     CouldntInitStateDirectory,
     CatalogDirMissing,
     StateDirMissing,
+    EncryptionSecretNotCorrectLength,
+    CouldntGenerateSecret,
 };
 
 pub fn init(allocator: Allocator) InitErrors!Config {
@@ -52,10 +56,22 @@ pub fn init(allocator: Allocator) InitErrors!Config {
         .port = config_file.port,
         .address = config_file.address,
         .scan_on_start = config_file.scan_on_start,
+        .encryption_secret = blk: {
+            if (config_file.encryption_secret) |secret| {
+                if (secret.len != 64) return error.EncryptionSecretNotCorrectLength;
+                var encryption_secret: [32]u8 = undefined;
+                _ = std.fmt.hexToBytes(&encryption_secret, secret) catch return error.CouldntGenerateSecret;
+                break :blk encryption_secret;
+            } else {
+                log.err("encryption_secret is null. Change the default configuration.", .{});
+                return error.CatalogDirMissing;
+            }
+        },
     };
 }
 
-pub fn deinit(self: Config, allocator: Allocator) void {
+pub fn deinit(self: *Config, allocator: Allocator) void {
+    @memset(&self.encryption_secret, 0);
     zon.parse.free(allocator, self);
 }
 const readFileZon = @import("common.zig").readFileZon;

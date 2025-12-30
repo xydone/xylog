@@ -1,4 +1,4 @@
-const log = std.log.scoped(.api_book_route);
+const log = std.log.scoped(.library_route);
 pub inline fn init(router: *Handler.Router) void {
     Scan.init(router);
 }
@@ -23,14 +23,14 @@ const Scan = Endpoint(struct {
     }
 });
 
-const Book = @import("../../catalog/book.zig");
+const Book = @import("../../../catalog/book.zig");
 
-const Endpoint = @import("../../endpoint.zig").Endpoint;
-const EndpointRequest = @import("../../endpoint.zig").EndpointRequest;
-const EndpointData = @import("../../endpoint.zig").EndpointData;
-const handleResponse = @import("../../endpoint.zig").handleResponse;
+const Endpoint = @import("../../../endpoint.zig").Endpoint;
+const EndpointRequest = @import("../../../endpoint.zig").EndpointRequest;
+const EndpointData = @import("../../../endpoint.zig").EndpointData;
+const handleResponse = @import("../../../endpoint.zig").handleResponse;
 
-const Handler = @import("../../handler.zig");
+const Handler = @import("../../../handler.zig");
 
 const httpz = @import("httpz");
 

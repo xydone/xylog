@@ -17,6 +17,7 @@ pub const EndpointData = struct {
     Response: type,
     path: []const u8,
     method: httpz.Method,
+    route_data: RouteData = .{},
 };
 
 pub fn Endpoint(
@@ -32,30 +33,31 @@ pub fn Endpoint(
 
         pub fn init(router: *Router) void {
             const path = T.endpoint_data.path;
+            const route_data = T.endpoint_data.route_data;
             switch (T.endpoint_data.method) {
                 .GET => {
-                    router.*.get(path, call, .{});
+                    router.*.get(path, call, .{ .data = &route_data });
                 },
                 .POST => {
-                    router.*.post(path, call, .{});
+                    router.*.post(path, call, .{ .data = &route_data });
                 },
                 .PATCH => {
-                    router.*.patch(path, call, .{});
+                    router.*.patch(path, call, .{ .data = &route_data });
                 },
                 .PUT => {
-                    router.*.put(path, call, .{});
+                    router.*.put(path, call, .{ .data = &route_data });
                 },
                 .OPTIONS => {
-                    router.*.options(path, call, .{});
+                    router.*.options(path, call, .{ .data = &route_data });
                 },
                 .CONNECT => {
-                    router.*.connect(path, call, .{});
+                    router.*.connect(path, call, .{ .data = &route_data });
                 },
                 .DELETE => {
-                    router.*.delete(path, call, .{});
+                    router.*.delete(path, call, .{ .data = &route_data });
                 },
                 .HEAD => {
-                    router.*.head(path, call, .{});
+                    router.*.head(path, call, .{ .data = &route_data });
                 },
                 // NOTE: http.zig supports non-standard http methods. For now, creating routes with a non-standard method is not supported.
                 .OTHER => {
@@ -215,9 +217,10 @@ pub fn handleResponse(httpz_res: *httpz.Response, response_error: ResponseError,
     return;
 }
 
-const std = @import("std");
-
 const Handler = @import("handler.zig");
 const Router = Handler.Router;
+const RouteData = Handler.RouteData;
 
 const httpz = @import("httpz");
+
+const std = @import("std");
