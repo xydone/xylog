@@ -86,22 +86,74 @@ pub fn parseName(full_name: []const u8) !ParsedInfo {
 }
 
 /// get total amount of pages in a chapter for archive based formats
-pub fn getPageAmount(file: *std.fs.File) !i64 {
-    var buffer: [1024]u8 = undefined;
+pub fn getPageAmount(path: [:0]const u8) !u32 {
+    var err: c_int = 0;
+    const archive = zip.zip_open(path.ptr, zip.ZIP_RDONLY, &err);
+    if (archive == null) return error.ZipOpenFailed;
+    defer _ = zip.zip_close(archive);
 
-    var file_reader = file.reader(&buffer);
-    var zip_iterator = try std.zip.Iterator.init(&file_reader);
+    const num_entries = zip.zip_get_num_entries(archive, 0);
+    var count: u32 = 0;
 
-    var name_buf: [1024]u8 = undefined;
-    var page_amount: u32 = 0;
+    var i: i64 = 0;
+    while (i < num_entries) : (i += 1) {
+        const name_ptr = zip.zip_get_name(archive, @intCast(i), 0);
+        if (name_ptr == null) continue;
 
-    while (try zip_iterator.next()) |entry| {
-        try file.seekTo(entry.header_zip_offset + @sizeOf(std.zip.CentralDirectoryFileHeader));
-        const filename = name_buf[0..entry.filename_len];
-        _ = try file.read(filename);
-        if (isImageFile(filename)) page_amount += 1;
+        if (isImageFile(std.mem.span(name_ptr))) {
+            count += 1;
+        }
     }
-    return page_amount;
+    return count;
+}
+
+/// Caller owns memory
+pub fn getComicInfo(allocator: std.mem.Allocator, path: [:0]const u8) !ComicInfo {
+    var err: c_int = 0;
+    const archive = zip.zip_open(path.ptr, zip.ZIP_RDONLY, &err);
+    if (archive == null) return error.ZipOpenFailed;
+    defer _ = zip.zip_close(archive);
+
+    var version: ?ComicInfo.Version = null;
+
+    const index = blk: {
+        const targets = [_]struct { name: [:0]const u8, ver: ComicInfo.Version }{
+            .{ .name = "ComicInfo.xml", .ver = .@"1_0" },
+            .{ .name = "ComicInfo2.xml", .ver = .@"2_0" },
+        };
+        for (targets) |target| {
+            const i = zip.zip_name_locate(archive, target.name, 0);
+            if (i >= 0) {
+                version = target.ver;
+                break :blk i;
+            }
+        }
+        // if we are here, no version was found
+        // what we return does not matter as long as we verify that the version variable is null
+        break :blk 0;
+    };
+
+    if (version == null) return error.NotFound;
+
+    var stat: zip.zip_stat_t = undefined;
+    _ = zip.zip_stat_init(&stat);
+    if (zip.zip_stat_index(archive, @intCast(index), 0, &stat) != 0) {
+        return error.ZipStatFailed;
+    }
+
+    const buffer = try allocator.alloc(u8, @intCast(stat.size));
+    errdefer allocator.free(buffer);
+
+    const file = zip.zip_fopen_index(archive, @intCast(index), 0);
+    if (file == null) return error.FileOpenFailed;
+    defer _ = zip.zip_fclose(file);
+
+    const read_bytes = zip.zip_fread(file, buffer.ptr, @intCast(stat.size));
+    if (read_bytes < 0 or read_bytes != stat.size) {
+        return error.ReadFailed;
+    }
+
+    return ComicInfo.getComicInfo(allocator, version.?, buffer);
 }
 
 fn isImageFile(filename: []const u8) bool {
@@ -129,8 +181,13 @@ const GetAll = @import("../database/chapter.zig").GetAll;
 const Create = @import("../database/chapter.zig").Create;
 const Database = @import("../database.zig");
 
+const ComicInfo = @import("../metadata/comicinfo/comicinfo.zig");
 const Library = @import("library.zig");
 const Book = @import("book.zig");
+
+const zip = @cImport({
+    @cInclude("zip.h");
+});
 
 const Allocator = std.mem.Allocator;
 const std = @import("std");

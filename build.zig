@@ -22,11 +22,18 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     module.addImport("httpz", httpz.module("httpz"));
+
     const zdt = b.dependency("zdt", .{
         .target = target,
         .optimize = optimize,
     });
     module.addImport("zdt", zdt.module("zdt"));
+
+    const dishwasher = b.dependency("dishwasher", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("xml", dishwasher.module("dishwasher"));
 
     const exe = b.addExecutable(.{
         .name = "xylog",

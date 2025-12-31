@@ -24,6 +24,10 @@
             .url = "git+https://github.com/sashka/libzip#fd3051f719aee93872a55f554b0b3fc5270aab21",
             .hash = "libzip-1.11.2-WX_L8EQ4AAC9YSQ1dhuNALqIuIPgZNkBdjQ0Ki7wC_W3",
         },
+        .dishwasher = .{
+            .url = "git+https://github.com/edqx/dishwasher?ref=0.15.2#14a17bb2ea1b53ac89f4bc914d8ba4c00ee1b310",
+            .hash = "dishwasher-2.0.0-aXVByTarAQCojk7aaxm436BqTMK13D-Ba6Z05klAIjsr",
+        },
     },
 
     .paths = .{

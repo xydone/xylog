@@ -72,7 +72,9 @@ pub fn init(allocator: Allocator) InitErrors!Config {
 
 pub fn deinit(self: *Config, allocator: Allocator) void {
     @memset(&self.encryption_secret, 0);
-    zon.parse.free(allocator, self);
+    allocator.free(self.address);
+    allocator.free(self.catalog_dir);
+    allocator.free(self.state_dir);
 }
 const readFileZon = @import("common.zig").readFileZon;
 const Catalog = @import("../catalog.zig");

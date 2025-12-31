@@ -3,6 +3,7 @@ _dir: std.fs.Dir,
 author: []const u8,
 name: []const u8,
 chapters: *ChapterMap,
+comic_info: ?ComicInfo,
 
 // name -> chapter
 const ChapterMap = std.StringHashMap(*Chapter);
@@ -40,6 +41,7 @@ pub fn init(
         ._dir = dir,
         .name = duped_name,
         .author = duped_author,
+        .comic_info = null,
     };
 
     try book.scan(
@@ -78,6 +80,7 @@ pub fn initManyFromDatabase(
             ._dir = dir,
             .name = record.title,
             .author = record.author,
+            .comic_info = null,
         };
 
         try library.books.put(record.title, book);
@@ -112,13 +115,22 @@ pub fn scan(
             const digest = try hashFile(file);
             const hash = std.fmt.allocPrint(allocator, "{x}", .{digest}) catch @panic("OOM");
 
+            const absolute_path = try self._dir.realpathAlloc(allocator, duped_name);
+            defer allocator.free(absolute_path);
+
+            // make the path null-terminated
+            const path_c = try allocator.dupeZ(u8, absolute_path);
+            defer allocator.free(path_c);
+
             try db_entries.append(allocator, .{
                 .file_name = duped_name,
                 .hash = hash,
                 .volume = info.volume,
                 .chapter = info.chapter,
-                .total_pages = try Chapter.getPageAmount(&file),
+                .total_pages = try Chapter.getPageAmount(path_c),
             });
+
+            self.comic_info = try Chapter.getComicInfo(allocator, path_c);
 
             try filenames.append(allocator, duped_name);
 
@@ -171,6 +183,7 @@ pub fn deinit(self: Book, allocator: Allocator) void {
 
 const hashFile = @import("../routes/kosync/util.zig").partialMd5;
 
+const ComicInfo = @import("../metadata/comicinfo/comicinfo.zig");
 const Chapter = @import("chapter.zig");
 const Library = @import("library.zig");
 

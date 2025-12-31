@@ -10,7 +10,7 @@ pub fn main() !void {
     };
 
     defer if (is_debug) {
-        // _ = debug_allocator.deinit();
+        _ = debug_allocator.deinit();
     };
 
     var config = try Config.init(allocator);
