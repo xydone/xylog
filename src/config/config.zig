@@ -1,9 +1,9 @@
 /// Absolute path
-catalog_dir: []const u8,
+catalog_dir: []u8,
 /// Absolute path
-state_dir: []const u8,
+state_dir: []u8,
 port: u16,
-address: []const u8,
+address: []u8,
 /// automatic library scanning on server start
 scan_on_start: bool = true,
 encryption_secret: [32]u8,
@@ -43,18 +43,19 @@ pub fn init(allocator: Allocator) InitErrors!Config {
         log.err("readFileZon failed with {}", .{err});
         return error.CouldntReadFile;
     };
+    defer zon.parse.free(allocator, config_file);
 
     return .{
-        .catalog_dir = if (config_file.catalog_dir) |dir| dir else {
+        .catalog_dir = if (config_file.catalog_dir) |dir| allocator.dupe(u8, dir) catch @panic("OOM") else {
             log.err("catalog_dir is null. Change the default configuration.", .{});
             return error.CatalogDirMissing;
         },
-        .state_dir = if (config_file.state_dir) |dir| dir else {
+        .state_dir = if (config_file.state_dir) |dir| allocator.dupe(u8, dir) catch @panic("OOM") else {
             log.err("state_dir is null. Change the default configuration.", .{});
             return error.CatalogDirMissing;
         },
         .port = config_file.port,
-        .address = config_file.address,
+        .address = allocator.dupe(u8, config_file.address) catch @panic("OOM"),
         .scan_on_start = config_file.scan_on_start,
         .encryption_secret = blk: {
             if (config_file.encryption_secret) |secret| {

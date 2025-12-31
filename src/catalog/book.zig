@@ -3,12 +3,13 @@ _dir: std.fs.Dir,
 author: []const u8,
 name: []const u8,
 chapters: *ChapterMap,
-comic_info: ?ComicInfo,
 
 // name -> chapter
 const ChapterMap = std.StringHashMap(*Chapter);
 
 pub const Book = @This();
+
+const log = std.log.scoped(.book);
 
 pub fn init(
     allocator: Allocator,
@@ -41,7 +42,6 @@ pub fn init(
         ._dir = dir,
         .name = duped_name,
         .author = duped_author,
-        .comic_info = null,
     };
 
     try book.scan(
@@ -58,8 +58,6 @@ pub fn initManyFromDatabase(
     database: Database,
     library_lookup_table: std.AutoHashMap(i64, *Library),
 ) !*std.AutoHashMap(i64, *Book) {
-    const chapters = allocator.create(ChapterMap) catch @panic("OOM");
-    chapters.* = ChapterMap.init(allocator);
 
     // NOTE: deinit() is not called on the records here, despite allocations being made, as the ownership is passed on further down the code.
     const book_records = try GetAll.call(allocator, database);
@@ -69,6 +67,8 @@ pub fn initManyFromDatabase(
     book_lookup_table.* = std.AutoHashMap(i64, *Book).init(allocator);
 
     for (book_records) |record| {
+        const chapters = allocator.create(ChapterMap) catch @panic("OOM");
+        chapters.* = ChapterMap.init(allocator);
         const book = allocator.create(Book) catch @panic("OOM");
         const library = library_lookup_table.get(record.library_id) orelse continue;
 
@@ -80,7 +80,6 @@ pub fn initManyFromDatabase(
             ._dir = dir,
             .name = record.title,
             .author = record.author,
-            .comic_info = null,
         };
 
         try library.books.put(record.title, book);
@@ -118,7 +117,6 @@ pub fn scan(
             const absolute_path = try self._dir.realpathAlloc(allocator, duped_name);
             defer allocator.free(absolute_path);
 
-            // make the path null-terminated
             const path_c = try allocator.dupeZ(u8, absolute_path);
             defer allocator.free(path_c);
 
@@ -129,8 +127,6 @@ pub fn scan(
                 .chapter = info.chapter,
                 .total_pages = try Chapter.getPageAmount(path_c),
             });
-
-            self.comic_info = try Chapter.getComicInfo(allocator, path_c);
 
             try filenames.append(allocator, duped_name);
 
@@ -156,14 +152,31 @@ pub fn scan(
 
     for (db_entries.items, responses, filenames.items) |entry, response, filename| {
         const chapter = allocator.create(Chapter) catch @panic("OOM");
+
+        const comic_info = blk: {
+            const absolute_path = try self._dir.realpathAlloc(allocator, filename);
+            defer allocator.free(absolute_path);
+
+            const path_c = try allocator.dupeZ(u8, absolute_path);
+            defer allocator.free(path_c);
+            break :blk try Chapter.getComicInfo(allocator, path_c);
+        };
+
         chapter.* = Chapter.init(
             response.chapter_id,
             entry.volume,
             entry.chapter,
             filename,
             entry.total_pages,
+            comic_info,
         );
-        try self.chapters.put(filename, chapter);
+
+        const existing_chapter = try self.chapters.fetchPut(filename, chapter);
+        // if this is a rescan of the same chapter, deinitialize memory
+        if (existing_chapter != null) {
+            allocator.destroy(existing_chapter.?.value);
+            allocator.free(existing_chapter.?.key);
+        }
     }
 }
 

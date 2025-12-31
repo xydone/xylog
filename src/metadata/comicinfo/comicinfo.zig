@@ -4,6 +4,17 @@ comic_info: ComicInfoData,
 
 const ComicInfo = @This();
 
+pub fn deinit(self: ComicInfo, allocator: Allocator) void {
+    allocator.free(self.slice);
+    switch (self.comic_info) {
+        .@"1_0" => |comic_info| {
+            comic_info.deinit(allocator);
+        },
+        .@"2_0" => |comic_info| {
+            comic_info.deinit(allocator);
+        },
+    }
+}
 pub const Version = enum {
     @"1_0",
     @"2_0",
@@ -18,7 +29,6 @@ pub fn getComicInfo(allocator: Allocator, version: Version, slice: []u8) !ComicI
     return .{
         .version = version,
         .slice = slice,
-        // this field will later be filled
         .comic_info = switch (version) {
             .@"1_0" => .{
                 .@"1_0" = try parse(ComicInfo_v1_0, allocator, slice),

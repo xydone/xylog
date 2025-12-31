@@ -126,6 +126,7 @@ pub fn deinit(self: Library, allocator: std.mem.Allocator) void {
     var book_it = self.books.iterator();
     while (book_it.next()) |entry| {
         defer allocator.destroy(entry.value_ptr.*);
+        allocator.free(entry.key_ptr.*);
         entry.value_ptr.*.deinit(allocator);
     }
     var hash_to_chapter_it = self.hash_to_chapter.keyIterator();

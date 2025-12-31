@@ -7,6 +7,7 @@ chapter: i64,
 /// represents the latest read chapter
 progress: i64,
 total_pages: i64,
+comic_info: ?ComicInfo,
 
 pub const Chapter = @This();
 
@@ -16,6 +17,7 @@ pub fn init(
     chapter: i64,
     name: []u8,
     total_pages: i64,
+    comic_info: ?ComicInfo,
 ) Chapter {
     return .{
         .id = id,
@@ -24,6 +26,7 @@ pub fn init(
         .volume = volume,
         .progress = 0,
         .total_pages = total_pages,
+        .comic_info = comic_info,
     };
 }
 
@@ -51,6 +54,8 @@ pub fn initFromDatabase(
             .chapter = record.chapter,
             .progress = record.progress,
             .total_pages = record.total_pages,
+            // FIXME: read comic info from database
+            .comic_info = null,
         };
 
         try target_book.chapters.put(record.title, chapter);
@@ -64,6 +69,11 @@ pub fn initFromDatabase(
 
 pub fn deinit(self: Chapter, allocator: Allocator) void {
     allocator.free(self.name);
+    {
+        if (self.comic_info) |comic_info| {
+            comic_info.deinit(allocator);
+        }
+    }
 }
 
 pub const ParsedInfo = struct {
