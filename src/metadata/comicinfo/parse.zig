@@ -1,6 +1,6 @@
 const log = std.log.scoped(.comic_info_v2_parse);
 
-pub fn parse(allocator: Allocator, slice: []u8) !ComicInfo {
+pub fn parse(T: type, allocator: Allocator, slice: []u8) !T {
     const parsed = try xml.parse.fromSlice(allocator, slice);
     defer parsed.deinit();
 
@@ -21,8 +21,8 @@ pub fn parse(allocator: Allocator, slice: []u8) !ComicInfo {
         return error.ComicInfoMissing;
     };
 
-    var comic_info: ComicInfo = .{};
-    var pages: std.ArrayList(ComicInfo.ComicPageInfo) = .empty;
+    var comic_info: T = .{};
+    var pages: std.ArrayList(T.ComicPageInfo) = .empty;
     defer pages.deinit(allocator);
 
     for (comic_info_tree.children) |node| {
@@ -36,11 +36,11 @@ pub fn parse(allocator: Allocator, slice: []u8) !ComicInfo {
             for (tree.children) |child_node| {
                 if (child_node == .elem and std.mem.eql(u8, child_node.elem.tag_name, "Page")) {
                     const page_elem = child_node.elem;
-                    var page_info: ComicInfo.ComicPageInfo = .{ .Image = -1 };
+                    var page_info: T.ComicPageInfo = .{ .Image = -1 };
 
                     for (page_elem.attributes) |attr| {
                         if (attr.value) |val| {
-                            try populateField(ComicInfo.ComicPageInfo, allocator, &page_info, attr.name, val);
+                            try populateField(T.ComicPageInfo, allocator, &page_info, attr.name, val);
                         }
                     }
                     if (page_info.Image == -1) {
@@ -54,7 +54,7 @@ pub fn parse(allocator: Allocator, slice: []u8) !ComicInfo {
             for (tree.children) |inner_node| {
                 if (inner_node == .text) {
                     const content = inner_node.text.trimmed();
-                    try populateField(ComicInfo, allocator, &comic_info, elem.tag_name, content);
+                    try populateField(T, allocator, &comic_info, elem.tag_name, content);
                 }
             }
         }
@@ -100,7 +100,6 @@ fn populateField(comptime T: type, allocator: Allocator, obj: *T, field_name: []
         }
     }
 }
-const ComicInfo = @import("comicinfo.zig");
 
 const xml = @import("xml");
 

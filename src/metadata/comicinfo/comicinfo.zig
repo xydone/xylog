@@ -10,7 +10,7 @@ pub const Version = enum {
 };
 
 pub const ComicInfoData = union(Version) {
-    @"1_0": void, // FIXME: currently void as we dont have a v1 implementation
+    @"1_0": ComicInfo_v1_0,
     @"2_0": ComicInfo_v2_0,
 };
 
@@ -20,19 +20,19 @@ pub fn getComicInfo(allocator: Allocator, version: Version, slice: []u8) !ComicI
         .slice = slice,
         // this field will later be filled
         .comic_info = switch (version) {
-            .@"1_0" => {
-                // FIXME: currently unreachable as we dont have a v1 implementation
-                unreachable;
+            .@"1_0" => .{
+                .@"1_0" = try parse(ComicInfo_v1_0, allocator, slice),
             },
             .@"2_0" => .{
-                .@"2_0" = try parse_v2_0(allocator, slice),
+                .@"2_0" = try parse(ComicInfo_v2_0, allocator, slice),
             },
         },
     };
 }
 
-const parse_v2_0 = @import("v2/parse.zig").parse;
+const parse = @import("parse.zig").parse;
 const ComicInfo_v2_0 = @import("v2/comicinfo.zig");
+const ComicInfo_v1_0 = @import("v1/comicinfo.zig");
 
 const Allocator = std.mem.Allocator;
 const std = @import("std");
