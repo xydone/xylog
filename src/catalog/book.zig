@@ -1,6 +1,6 @@
 id: i64,
 _dir: std.fs.Dir,
-author: []const u8,
+author: ?[]const u8,
 name: []const u8,
 chapters: *ChapterMap,
 
@@ -15,7 +15,7 @@ pub fn init(
     allocator: Allocator,
     dir: std.fs.Dir,
     name: []const u8,
-    author: []const u8,
+    author: ?[]const u8,
     database: Database,
     library_id: i64,
     hash_to_chapter_map: *Library.HashToChapterMap,
@@ -24,12 +24,11 @@ pub fn init(
     chapters.* = ChapterMap.init(allocator);
 
     const duped_name = allocator.dupe(u8, name) catch @panic("OOM");
-    const duped_author = allocator.dupe(u8, author) catch @panic("OOM");
-
+    const author_slice = if (author) |slice| allocator.dupe(u8, slice) catch @panic("OOM") else null;
     const response = try Create.call(
         database,
         duped_name,
-        author,
+        author_slice,
         library_id,
     );
 
@@ -41,7 +40,7 @@ pub fn init(
         .chapters = chapters,
         ._dir = dir,
         .name = duped_name,
-        .author = duped_author,
+        .author = author_slice,
     };
 
     try book.scan(
@@ -161,6 +160,12 @@ pub fn scan(
             defer allocator.free(path_c);
             break :blk try Chapter.getComicInfo(allocator, path_c);
         };
+        defer comic_info.deinit(allocator);
+
+        self.author = switch (comic_info.comic_info) {
+            .@"1_0" => |ci| ci.Writer,
+            .@"2_0" => |ci| ci.Writer,
+        };
 
         chapter.* = Chapter.init(
             response.chapter_id,
@@ -168,7 +173,6 @@ pub fn scan(
             entry.chapter,
             filename,
             entry.total_pages,
-            comic_info,
         );
 
         const existing_chapter = try self.chapters.fetchPut(filename, chapter);
@@ -182,7 +186,7 @@ pub fn scan(
 
 pub fn deinit(self: Book, allocator: Allocator) void {
     allocator.free(self.name);
-    allocator.free(self.author);
+    if (self.author) |author| allocator.free(author);
     {
         var it = self.chapters.valueIterator();
         while (it.next()) |chapter| {

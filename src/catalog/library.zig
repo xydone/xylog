@@ -102,7 +102,7 @@ pub fn scan(
                     book_dir,
                     entry.name,
                     // TODO: actual author name
-                    "Unknown Author",
+                    null,
                     database,
                     library_id,
                     self.hash_to_chapter,

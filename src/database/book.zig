@@ -15,7 +15,7 @@ pub const Create = struct {
     pub const Response = struct {
         book_id: i64,
     };
-    pub fn call(database: Database, name: []const u8, author: []const u8, library_id: i64) !Response {
+    pub fn call(database: Database, name: []const u8, author: ?[]const u8, library_id: i64) !Response {
         const sql =
             \\INSERT INTO books (library_id, title, author) 
             \\VALUES (?1, ?2, ?3)
