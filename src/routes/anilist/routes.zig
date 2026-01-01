@@ -7,7 +7,8 @@ pub inline fn init(router: *Handler.Router) void {
 
 const GetCallback = Endpoint(struct {
     const Params = struct {
-        anilist_client_id: u64,
+        client_id: u64,
+        secret: []const u8,
     };
     pub const endpoint_data: EndpointData = .{
         .Request = .{
@@ -15,7 +16,7 @@ const GetCallback = Endpoint(struct {
         },
         .Response = void,
         .method = .GET,
-        .path = "/anilist/:anilist_client_id/callback",
+        .path = "/anilist/:client_id/:secret/callback",
         .route_data = .{
             .restricted = true,
         },
@@ -30,11 +31,13 @@ const GetCallback = Endpoint(struct {
 
         const redirect_url = try std.fmt.allocPrint(
             allocator,
-            "http://{s}:{d}/{s}/anilist",
+            "http://{s}:{d}/anilist/{s}/{s}/{d}",
             .{
                 config.address,
                 config.port,
+                req.params.secret,
                 one_time_token,
+                req.params.client_id,
             },
         );
         defer allocator.free(redirect_url);
@@ -42,7 +45,7 @@ const GetCallback = Endpoint(struct {
         const authorization_url = try std.fmt.allocPrint(
             allocator,
             "https://anilist.co/api/v2/oauth/authorize?client_id={d}&redirect_uri={s}&response_type=code",
-            .{ req.params.anilist_client_id, redirect_url },
+            .{ req.params.client_id, redirect_url },
         );
 
         const response: struct {
@@ -61,7 +64,9 @@ const GetCallback = Endpoint(struct {
 
 const HandleCallback = Endpoint(struct {
     const Params = struct {
+        client_secret: []const u8,
         authentication: []const u8,
+        client_id: u64,
     };
     const Query = struct {
         code: []const u8,
@@ -73,7 +78,7 @@ const HandleCallback = Endpoint(struct {
         },
         .Response = void,
         .method = .GET,
-        .path = "/:authentication/anilist",
+        .path = "/anilist/:client_secret/:authentication/:client_id",
         // INFO: the reason why this endpoint handles authentication manually is because AniList cannot send us the request with the required API key
         // This means we have to append the authentication element into the request path itself
         .route_data = .{},
@@ -92,10 +97,57 @@ const HandleCallback = Endpoint(struct {
         const pair = ctx.one_time_token_map.fetchRemove(req.params.authentication).?;
         allocator.free(pair.key);
 
+        // after having grabbed the code, we need to convert it to an access token
+        // INFO: https://docs.anilist.co/guide/auth/authorization-code#converting-codes-to-tokens
+        const http = HTTP{
+            .url = "https://anilist.co/api/v2/oauth/token",
+            .headers = "Content-Type: application/json\r\nAccept: application/json\r\n",
+        };
+
+        const TokenRequest = struct {
+            grant_type: []const u8,
+            client_id: u64,
+            client_secret: []const u8,
+            redirect_uri: []const u8,
+            code: []const u8,
+        };
+
+        const redirect_uri = try std.fmt.allocPrint(
+            allocator,
+            "http://{s}:{d}/anilist/{s}/{s}/{d}",
+            .{
+                ctx.config.address,
+                ctx.config.port,
+                req.params.client_secret,
+                req.params.authentication,
+                req.params.client_id,
+            },
+        );
+        defer allocator.free(redirect_uri);
+
+        const payload = TokenRequest{
+            .grant_type = "authorization_code",
+            .client_id = req.params.client_id,
+            .client_secret = req.params.client_secret,
+            .redirect_uri = redirect_uri,
+            .code = req.query.code,
+        };
+        const TokenResponse = struct {
+            access_token: []const u8,
+            token_type: []const u8,
+            expires_in: i64,
+        };
+
+        var parsed_response = try http.post(allocator, payload, TokenResponse, .{ .ignore_unknown_fields = true });
+        defer parsed_response.deinit();
+
+        const access_token = parsed_response.value.access_token;
+        std.debug.print("access token: {s}\n", .{access_token});
+
         const request: CreateDB.Request = .{
             .user_id = user_id,
             .service_name = "anilist",
-            .plaintext_api_key = req.query.code,
+            .plaintext_api_key = access_token,
         };
         _ = CreateDB.call(
             allocator,
@@ -121,6 +173,7 @@ const handleResponse = @import("../../endpoint.zig").handleResponse;
 
 const createOneTimeToken = @import("../../auth/util.zig").createOneTimeToken;
 
+const HTTP = @import("../../http.zig");
 const Handler = @import("../../handler.zig");
 const httpz = @import("httpz");
 

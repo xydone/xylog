@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     const zqlite = b.dependency("zqlite", .{
@@ -35,11 +36,24 @@ pub fn build(b: *std.Build) void {
     });
     module.addImport("xml", dishwasher.module("dishwasher"));
 
+    const curl = b.dependency("curl", .{
+        .target = target,
+        .optimize = optimize,
+        .nghttp2 = false,
+        .libpsl = false,
+        .libssh2 = false,
+        .libidn2 = false,
+        .@"disable-ldap" = true,
+        .@"use-mbedtls" = true,
+    });
+    const libCurl = @import("curl").artifact(curl, .lib);
+
+    module.linkLibrary(libCurl);
+
     const exe = b.addExecutable(.{
         .name = "xylog",
         .root_module = module,
     });
-
     // sqlite
     module.addCSourceFile(.{
         .file = b.path("lib/sqlite/sqlite3.c"),
@@ -68,7 +82,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     module.linkLibrary(bzip_dependency.artifact("zip"));
-    exe.linkLibC();
 
     b.installArtifact(exe);
 
