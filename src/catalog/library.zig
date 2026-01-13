@@ -11,6 +11,8 @@ pub const HashToChapterMap = std.StringHashMap(struct {
     chapter_name: []const u8,
 });
 
+const log = std.log.scoped(.library);
+
 // name -> book
 const BookMap = std.StringHashMap(*Book);
 
@@ -30,7 +32,7 @@ pub fn init(
 
     const response = try Create.call(database, name);
 
-    const library: Library = .{
+    var library: Library = .{
         .id = response.library_id,
         .name = name,
         ._dir = dir,
@@ -38,7 +40,7 @@ pub fn init(
         .hash_to_chapter = hash_to_chapter,
     };
 
-    try library.scan(allocator, database, response.library_id);
+    try library.scan(allocator, database);
 
     return library;
 }
@@ -86,29 +88,16 @@ pub fn initFromDatabase(allocator: Allocator, catalog_dir: *std.fs.Dir, database
 }
 
 pub fn scan(
-    self: Library,
+    self: *Library,
     allocator: Allocator,
     database: Database,
-    library_id: i64,
 ) !void {
     var it = self._dir.iterate();
 
     while (try it.next()) |entry| {
         switch (entry.kind) {
             .directory => {
-                const book_dir = try self._dir.openDir(entry.name, .{ .iterate = true });
-                const book = try Book.init(
-                    allocator,
-                    book_dir,
-                    entry.name,
-                    // TODO: actual author name
-                    null,
-                    database,
-                    library_id,
-                    self.hash_to_chapter,
-                );
-                const duped_name = allocator.dupe(u8, entry.name) catch @panic("OOM");
-                self.books.put(duped_name, book) catch @panic("OOM");
+                try self.addBook(allocator, database, entry.name);
             },
             else => {},
         }
@@ -141,6 +130,110 @@ pub fn getChapterByHash(self: Library, hash: []const u8) !*Chapter {
     return result.book.chapters.get(result.chapter_name) orelse return error.ChapterNotFound;
 }
 
+/// Adds book that is inside the data directory to the library, without the need for a full rescan.
+pub fn addBook(
+    self: *Library,
+    allocator: Allocator,
+    database: Database,
+    book_folder_name: []const u8,
+) !void {
+    // guarantee that book name is unique in library
+    if (self.books.contains(book_folder_name)) {
+        return error.BookAlreadyExists;
+    }
+
+    // assume that the book already exists in the directory
+    const book_dir = self._dir.openDir(book_folder_name, .{ .iterate = true }) catch |err| {
+        log.err("addBook failed to open book_dir! {}", .{err});
+        return error.BookNotFoundInDirectory;
+    };
+
+    const book = try Book.init(
+        allocator,
+        book_dir,
+        book_folder_name,
+        null, // TODO: use an actual author
+        database,
+        self.id,
+        self.hash_to_chapter,
+    );
+
+    const duped_name = try allocator.dupe(u8, book_folder_name);
+
+    try self.books.put(duped_name, book);
+}
+
+/// Copies or moves a book from a given directory to the data directory and adds it to the library.
+pub fn importBook(
+    self: *Library,
+    allocator: Allocator,
+    database: Database,
+    source_path: []const u8,
+    book_folder_name: []const u8,
+    operation_type: Config.Ingest.OperationType,
+) !void {
+    if (self.books.contains(book_folder_name)) return error.BookAlreadyExists;
+
+    switch (operation_type) {
+        .move => {
+            std.fs.cwd().rename(source_path, book_folder_name) catch |err| {
+                log.err("importBook: move failed! {}", .{err});
+                return error.MoveFailed;
+            };
+        },
+        .copy => {
+            try self._dir.makeDir(book_folder_name);
+
+            // cleanup if copy fails midway
+            errdefer {
+                self._dir.deleteTree(book_folder_name) catch |err| {
+                    log.warn("importBook: deleting the tree during cleanup failed! {}", .{err});
+                };
+            }
+
+            var src_dir = std.fs.openDirAbsolute(source_path, .{ .iterate = true }) catch |err| {
+                log.err("importBook: copy failed to open src_dir! {}", .{err});
+                return error.CopyFailed;
+            };
+            defer src_dir.close();
+
+            var dest_dir = self._dir.openDir(book_folder_name, .{}) catch |err| {
+                log.err("importBook: copy failed to open dest_dir! {}", .{err});
+                return error.CopyFailed;
+            };
+
+            defer dest_dir.close();
+            copyDirRecursive(src_dir, dest_dir) catch |err| {
+                log.err("importBook: copyDirRecursive failed! {}", .{err});
+                return error.CopyFailed;
+            };
+        },
+    }
+
+    try self.addBook(allocator, database, book_folder_name);
+    log.debug("importBook: imported {s} from {s}", .{ book_folder_name, source_path });
+}
+
+fn copyDirRecursive(src_dir: std.fs.Dir, dest_dir: std.fs.Dir) !void {
+    var it = src_dir.iterate();
+    while (try it.next()) |entry| {
+        switch (entry.kind) {
+            .file => {
+                try src_dir.copyFile(entry.name, dest_dir, entry.name, .{});
+            },
+            .directory => {
+                try dest_dir.makeDir(entry.name);
+                var sub_src = try src_dir.openDir(entry.name, .{ .iterate = true });
+                defer sub_src.close();
+                var sub_dest = try dest_dir.openDir(entry.name, .{});
+                defer sub_dest.close();
+                try copyDirRecursive(sub_src, sub_dest);
+            },
+            else => continue,
+        }
+    }
+}
+
 const hashFile = @import("../routes/kosync/util.zig").partialMd5;
 
 const GetAll = @import("../database/library.zig").GetAll;
@@ -149,6 +242,7 @@ const Database = @import("../database.zig");
 
 const Book = @import("book.zig");
 const Chapter = @import("chapter.zig");
+const Config = @import("../config/config.zig");
 
 const Allocator = std.mem.Allocator;
 const std = @import("std");

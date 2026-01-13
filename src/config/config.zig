@@ -7,6 +7,15 @@ address: []u8,
 /// automatic library scanning on server start
 scan_on_start: bool = true,
 encryption_secret: [32]u8,
+ingest: Ingest,
+
+pub const Ingest = struct {
+    /// the name of the library that will be inserted into when ingesting
+    default_library_to_use: []u8,
+    operation_type: OperationType,
+
+    pub const OperationType = enum { copy, move };
+};
 
 const path = "config/config.zon";
 const log = std.log.scoped(.config);
@@ -24,14 +33,17 @@ const ConfigFile = struct {
     address: []const u8,
     scan_on_start: bool = true,
     encryption_secret: ?[]const u8,
+    ingest: struct {
+        default_library_to_use: ?[]const u8,
+        operation_type: Ingest.OperationType,
+    },
 };
 
 pub const InitErrors = error{
     CouldntReadFile,
     CouldntInitDataDirectory,
     CouldntInitStateDirectory,
-    CatalogDirMissing,
-    StateDirMissing,
+    RequiredNullableFieldMissing,
     EncryptionSecretNotCorrectLength,
     CouldntGenerateSecret,
 };
@@ -48,11 +60,11 @@ pub fn init(allocator: Allocator) InitErrors!Config {
     return .{
         .catalog_dir = if (config_file.catalog_dir) |dir| allocator.dupe(u8, dir) catch @panic("OOM") else {
             log.err("catalog_dir is null. Change the default configuration.", .{});
-            return error.CatalogDirMissing;
+            return error.RequiredNullableFieldMissing;
         },
         .state_dir = if (config_file.state_dir) |dir| allocator.dupe(u8, dir) catch @panic("OOM") else {
             log.err("state_dir is null. Change the default configuration.", .{});
-            return error.CatalogDirMissing;
+            return error.RequiredNullableFieldMissing;
         },
         .port = config_file.port,
         .address = allocator.dupe(u8, config_file.address) catch @panic("OOM"),
@@ -65,8 +77,19 @@ pub fn init(allocator: Allocator) InitErrors!Config {
                 break :blk encryption_secret;
             } else {
                 log.err("encryption_secret is null. Change the default configuration.", .{});
-                return error.CatalogDirMissing;
+                return error.RequiredNullableFieldMissing;
             }
+        },
+        .ingest = .{
+            .default_library_to_use = blk: {
+                if (config_file.ingest.default_library_to_use) |library| {
+                    break :blk allocator.dupe(u8, library) catch @panic("OOM");
+                } else {
+                    log.err("Ingest's default_library_to_use is null. Change the default configuration.", .{});
+                    return error.RequiredNullableFieldMissing;
+                }
+            },
+            .operation_type = config_file.ingest.operation_type,
         },
     };
 }
@@ -76,6 +99,8 @@ pub fn deinit(self: *Config, allocator: Allocator) void {
     allocator.free(self.address);
     allocator.free(self.catalog_dir);
     allocator.free(self.state_dir);
+
+    allocator.free(self.ingest.default_library_to_use);
 }
 const readFileZon = @import("common.zig").readFileZon;
 const Catalog = @import("../catalog.zig");

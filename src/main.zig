@@ -22,6 +22,14 @@ pub fn main() !void {
     var catalog = try Catalog.init(config, allocator, database);
     defer catalog.deinit(allocator);
 
+    const scanner_thread = try std.Thread.spawn(.{}, Ingest.scan, .{
+        allocator,
+        database,
+        config,
+        &catalog,
+    });
+    scanner_thread.detach();
+
     var handler = try Handler.init(allocator, .{
         .catalog = &catalog,
         .config = &config,
@@ -48,6 +56,7 @@ pub fn main() !void {
 
 const API = @import("routes/routes.zig");
 
+const Ingest = @import("ingest/ingest.zig");
 const Catalog = @import("catalog.zig");
 const Database = @import("database.zig");
 const Config = @import("config/config.zig");

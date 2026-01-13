@@ -22,4 +22,14 @@
     // it is a required field and no default is provided.
     // NOTE: this can be done by executing `openssl rand -hex 32` in a terminal and copying the output.
     .encryption_secret = null,
+
+    // The folder that will be used to "feed" the library at runtime, by periodically scanning this folder
+    .ingest = .{
+        // Which library to add the new content to
+        .default_library_to_use = null,
+
+        // When transfering content from ingest to the content directory, should the files be copied over or moved?
+        // Use `.copy` for copying and `.move` for moving.
+        .operation_type = .copy,
+    },
 }
