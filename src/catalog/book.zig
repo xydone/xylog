@@ -31,6 +31,12 @@ pub fn init(
         author_slice,
         library_id,
     );
+    // clean up the insert if adding fails
+    errdefer {
+        Delete.call(database, response.book_id) catch |err| {
+            log.err("Failed to rollback book insertion for ID {d}! {}", .{ response.book_id, err });
+        };
+    }
 
     // we need to be the ones allocating the book during the initialization process as we need to put a stable pointer in the map
     const book = allocator.create(Book) catch @panic("OOM");
@@ -102,16 +108,16 @@ pub fn scan(
     var filenames = std.ArrayList([]u8).empty;
     defer filenames.deinit(allocator);
 
+    var comic_infos = std.ArrayList(ComicInfo).empty;
+    defer {
+        for (comic_infos.items) |comic_info| {
+            comic_info.deinit(allocator);
+        }
+    }
+
     while (try it.next()) |entry| {
         if (entry.kind == .file) {
             const duped_name = try allocator.dupe(u8, entry.name);
-            const info = try Chapter.parseName(duped_name);
-
-            var file = try self._dir.openFile(duped_name, .{ .mode = .read_only });
-            defer file.close();
-
-            const digest = try hashFile(file);
-            const hash = std.fmt.allocPrint(allocator, "{x}", .{digest}) catch @panic("OOM");
 
             const absolute_path = try self._dir.realpathAlloc(allocator, duped_name);
             defer allocator.free(absolute_path);
@@ -119,11 +125,62 @@ pub fn scan(
             const path_c = try allocator.dupeZ(u8, absolute_path);
             defer allocator.free(path_c);
 
+            const ChapterAndVolume = struct {
+                volume: i64,
+                chapter: i64,
+            };
+            const chapter_and_volume: ChapterAndVolume = blk: {
+                const name_info: ?Chapter.ParsedInfo = Chapter.parseName(duped_name) catch null;
+                const comic_info = try Chapter.getComicInfo(allocator, path_c);
+
+                try comic_infos.append(allocator, comic_info);
+                // NOTE: file name takes precedence over ComicInfo.xml.
+                // The decision for this is the fact file names are easily modifiable by the average user and easily visible.
+                // They don't extracting the archive and modifying the information. This behaviour may change in the future.
+
+                if (name_info) |info| {
+                    break :blk .{
+                        .chapter = info.chapter,
+                        .volume = info.volume,
+                    };
+                }
+                switch (comic_info.comic_info) {
+                    inline else => |ver| {
+                        break :blk .{
+                            .chapter = chapter_blk: {
+                                const string = ver.Number orelse {
+                                    log.err("{s} does not contain chapter information inside the Number field on ComicInfo.xml!", .{duped_name});
+                                    return error.MissingChapter;
+                                };
+                                break :chapter_blk std.fmt.parseInt(i64, string, 10) catch {
+                                    log.err("{s}'s chapter inside ComicInfo.xml is not a valid integer! Found {s}", .{ duped_name, string });
+                                    return error.MissingChapter;
+                                };
+                            },
+
+                            .volume = volume_blk: {
+                                if (ver.Volume == -1) {
+                                    log.err("{s} does not contain volume information inside the Volume field on ComicInfo.xml!", .{duped_name});
+                                    return error.MissingVolume;
+                                }
+                                break :volume_blk ver.Volume;
+                            },
+                        };
+                    },
+                }
+            };
+
+            var file = try self._dir.openFile(duped_name, .{ .mode = .read_only });
+            defer file.close();
+
+            const digest = try hashFile(file);
+            const hash = std.fmt.allocPrint(allocator, "{x}", .{digest}) catch @panic("OOM");
+
             try db_entries.append(allocator, .{
                 .file_name = duped_name,
                 .hash = hash,
-                .volume = info.volume,
-                .chapter = info.chapter,
+                .volume = chapter_and_volume.volume,
+                .chapter = chapter_and_volume.chapter,
                 .total_pages = try Chapter.getPageAmount(path_c),
             });
 
@@ -149,22 +206,11 @@ pub fn scan(
     );
     defer allocator.free(responses);
 
-    for (db_entries.items, responses, filenames.items) |entry, response, filename| {
+    for (db_entries.items, responses, filenames.items, comic_infos.items) |entry, response, filename, comic_info| {
         const chapter = allocator.create(Chapter) catch @panic("OOM");
 
-        const comic_info = blk: {
-            const absolute_path = try self._dir.realpathAlloc(allocator, filename);
-            defer allocator.free(absolute_path);
-
-            const path_c = try allocator.dupeZ(u8, absolute_path);
-            defer allocator.free(path_c);
-            break :blk try Chapter.getComicInfo(allocator, path_c);
-        };
-        defer comic_info.deinit(allocator);
-
         self.author = switch (comic_info.comic_info) {
-            .@"1_0" => |ci| ci.Writer,
-            .@"2_0" => |ci| ci.Writer,
+            inline else => |ver| ver.Writer,
         };
 
         chapter.* = Chapter.init(
@@ -207,6 +253,8 @@ const Library = @import("library.zig");
 const CreateMany = @import("../database/chapter.zig").CreateMany;
 const GetAll = @import("../database/book.zig").GetAll;
 const Create = @import("../database/book.zig").Create;
+const Delete = @import("../database/book.zig").Delete;
+
 const Database = @import("../database.zig");
 
 const Allocator = std.mem.Allocator;

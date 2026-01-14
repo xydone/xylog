@@ -80,6 +80,13 @@ pub const GetAll = struct {
     const SQL_STRING = "SELECT id, library_id, title, author FROM books";
 };
 
+pub const Delete = struct {
+    pub fn call(database: Database, id: i64) !void {
+        try database.conn.exec(SQL_STRING, .{id});
+    }
+    const SQL_STRING = "DELETE FROM books WHERE id = ?1";
+};
+
 const Database = @import("../database.zig");
 
 const Allocator = std.mem.Allocator;

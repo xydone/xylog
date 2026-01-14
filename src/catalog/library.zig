@@ -180,12 +180,15 @@ pub fn importBook(
                 log.err("importBook: move failed! {}", .{err});
                 return error.MoveFailed;
             };
+
+            try self.addBook(allocator, database, book_folder_name);
         },
         .copy => {
             try self._dir.makeDir(book_folder_name);
 
             // cleanup if copy fails midway
             errdefer {
+                log.warn("importBook: ran into error. Deleting tree...", .{});
                 self._dir.deleteTree(book_folder_name) catch |err| {
                     log.warn("importBook: deleting the tree during cleanup failed! {}", .{err});
                 };
@@ -207,10 +210,13 @@ pub fn importBook(
                 log.err("importBook: copyDirRecursive failed! {}", .{err});
                 return error.CopyFailed;
             };
+
+            // INFO: the calls to addBook are identical across both operations, but are called separately.
+            // This is done so we can cleanly leverage the errdefer for cleanup.
+            try self.addBook(allocator, database, book_folder_name);
         },
     }
 
-    try self.addBook(allocator, database, book_folder_name);
     log.debug("importBook: imported {s} from {s}", .{ book_folder_name, source_path });
 }
 
