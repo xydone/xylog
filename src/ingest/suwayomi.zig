@@ -43,6 +43,7 @@ pub fn scan(
 
             library.importBook(
                 allocator,
+                config,
                 database,
                 book_path,
                 book_name,

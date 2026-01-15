@@ -32,6 +32,7 @@ pub fn init(
     if (config.scan_on_start or database.is_first_time_initializing == true) {
         try catalog.scan(
             allocator,
+            config,
             database,
         );
     } else {
@@ -43,6 +44,7 @@ pub fn init(
 pub fn scan(
     catalog: Catalog,
     allocator: Allocator,
+    config: Config,
     database: Database,
 ) !void {
     log.debug("Scanning catalog from disk...", .{});
@@ -53,6 +55,7 @@ pub fn scan(
                 const library_dir = try catalog._dir.openDir(entry.name, .{ .iterate = true });
                 const library = try Library.init(
                     allocator,
+                    config,
                     library_dir,
                     entry.name,
                     database,

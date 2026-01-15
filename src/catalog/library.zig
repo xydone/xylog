@@ -20,6 +20,7 @@ const Library = @This();
 
 pub fn init(
     allocator: std.mem.Allocator,
+    config: Config,
     dir: std.fs.Dir,
     name: []const u8,
     database: Database,
@@ -40,7 +41,7 @@ pub fn init(
         .hash_to_chapter = hash_to_chapter,
     };
 
-    try library.scan(allocator, database);
+    try library.scan(allocator, config, database);
 
     return library;
 }
@@ -90,6 +91,7 @@ pub fn initFromDatabase(allocator: Allocator, catalog_dir: *std.fs.Dir, database
 pub fn scan(
     self: *Library,
     allocator: Allocator,
+    config: Config,
     database: Database,
 ) !void {
     var it = self._dir.iterate();
@@ -97,7 +99,12 @@ pub fn scan(
     while (try it.next()) |entry| {
         switch (entry.kind) {
             .directory => {
-                try self.addBook(allocator, database, entry.name);
+                try self.addBook(
+                    allocator,
+                    config,
+                    database,
+                    entry.name,
+                );
             },
             else => {},
         }
@@ -134,6 +141,7 @@ pub fn getChapterByHash(self: Library, hash: []const u8) !*Chapter {
 pub fn addBook(
     self: *Library,
     allocator: Allocator,
+    config: Config,
     database: Database,
     book_folder_name: []const u8,
 ) !void {
@@ -150,6 +158,7 @@ pub fn addBook(
 
     const book = try Book.init(
         allocator,
+        config,
         book_dir,
         book_folder_name,
         null, // TODO: use an actual author
@@ -167,6 +176,7 @@ pub fn addBook(
 pub fn importBook(
     self: *Library,
     allocator: Allocator,
+    config: Config,
     database: Database,
     source_path: []const u8,
     book_folder_name: []const u8,
@@ -181,7 +191,7 @@ pub fn importBook(
                 return error.MoveFailed;
             };
 
-            try self.addBook(allocator, database, book_folder_name);
+            try self.addBook(allocator, config, database, book_folder_name);
         },
         .copy => {
             try self._dir.makeDir(book_folder_name);
@@ -213,7 +223,7 @@ pub fn importBook(
 
             // INFO: the calls to addBook are identical across both operations, but are called separately.
             // This is done so we can cleanly leverage the errdefer for cleanup.
-            try self.addBook(allocator, database, book_folder_name);
+            try self.addBook(allocator, config, database, book_folder_name);
         },
     }
 

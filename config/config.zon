@@ -32,4 +32,16 @@
         // Use `.copy` for copying and `.move` for moving.
         .operation_type = .copy,
     },
+
+    // Settings, specific to the process of applying metadata from files to the database
+    .metadata = .{
+        .comic_info = .{
+            // Depending on how they are sourced, ComicInfo files are often not perfect and miss crucial information.
+
+            // If the volume tag is missing, how should we handle it?
+            // .default_to_0 -> defaults to 0
+            // .errors -> returns an error and does not import the book
+            .handle_missing_volume = .default_to_0,
+        },
+    },
 }

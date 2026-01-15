@@ -8,6 +8,7 @@ address: []u8,
 scan_on_start: bool = true,
 encryption_secret: [32]u8,
 ingest: Ingest,
+metadata: Metadata,
 
 pub const Ingest = struct {
     /// the name of the library that will be inserted into when ingesting
@@ -15,6 +16,16 @@ pub const Ingest = struct {
     operation_type: OperationType,
 
     pub const OperationType = enum { copy, move };
+};
+
+pub const Metadata = struct {
+    comic_info: ComicInfo,
+
+    pub const ComicInfo = struct {
+        handle_missing_volume: HandleMissingVolume,
+
+        pub const HandleMissingVolume = enum { default_to_0, errors };
+    };
 };
 
 const path = "config/config.zon";
@@ -37,6 +48,7 @@ const ConfigFile = struct {
         default_library_to_use: ?[]const u8,
         operation_type: Ingest.OperationType,
     },
+    metadata: Metadata,
 };
 
 pub const InitErrors = error{
@@ -90,6 +102,11 @@ pub fn init(allocator: Allocator) InitErrors!Config {
                 }
             },
             .operation_type = config_file.ingest.operation_type,
+        },
+        .metadata = .{
+            .comic_info = .{
+                .handle_missing_volume = config_file.metadata.comic_info.handle_missing_volume,
+            },
         },
     };
 }

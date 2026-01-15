@@ -13,7 +13,7 @@ const Scan = Endpoint(struct {
 
     pub fn call(ctx: *Handler.RequestContext, _: EndpointRequest(void, void, void), res: *httpz.Response) anyerror!void {
         const allocator = res.arena;
-        ctx.catalog.scan(allocator, ctx.database.*) catch |err| {
+        ctx.catalog.scan(allocator, ctx.config.*, ctx.database.*) catch |err| {
             log.err("Library scan failed: {}\n", .{err});
             handleResponse(res, .internal_server_error, "Couldn't scan library.");
             return;

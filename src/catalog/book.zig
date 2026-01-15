@@ -13,6 +13,7 @@ const log = std.log.scoped(.book);
 
 pub fn init(
     allocator: Allocator,
+    config: Config,
     dir: std.fs.Dir,
     name: []const u8,
     author: ?[]const u8,
@@ -51,6 +52,7 @@ pub fn init(
 
     try book.scan(
         allocator,
+        config,
         database,
         hash_to_chapter_map,
     );
@@ -97,6 +99,7 @@ pub fn initManyFromDatabase(
 pub fn scan(
     self: *Book,
     allocator: Allocator,
+    config: Config,
     database: Database,
     hash_to_chapter_map: *Library.HashToChapterMap,
 ) !void {
@@ -131,6 +134,7 @@ pub fn scan(
                 const comic_info_metadata = ComicInfoMetadata.scan(
                     allocator,
                     path_c,
+                    config.metadata.comic_info,
                 ) catch |err| {
                     log.err("Failed to fetch ComicInfo metadata! {}", .{err});
                     return err;
@@ -214,6 +218,7 @@ const ComicInfoMetadata = struct {
     fn scan(
         allocator: Allocator,
         path: [:0]u8,
+        metadata_config: Config.Metadata.ComicInfo,
     ) !struct { chapter: i64, volume: i64 } {
         const comic_info = try Chapter.getComicInfo(allocator, path);
 
@@ -231,7 +236,16 @@ const ComicInfoMetadata = struct {
 
                     .volume = volume_blk: {
                         if (ver.Volume == -1) {
-                            return error.MissingVolume;
+                            switch (metadata_config.handle_missing_volume) {
+                                .default_to_0 => {
+                                    log.debug("Handling missing volume by setting it 0", .{});
+                                    break :volume_blk 0;
+                                },
+                                .errors => {
+                                    log.debug("Handling missing volume by erroring", .{});
+                                    return error.MissingVolume;
+                                },
+                            }
                         }
                         break :volume_blk ver.Volume;
                     },
@@ -253,6 +267,8 @@ const CreateMany = @import("../database/chapter.zig").CreateMany;
 const GetAll = @import("../database/book.zig").GetAll;
 const Create = @import("../database/book.zig").Create;
 const Delete = @import("../database/book.zig").Delete;
+
+const Config = @import("../config/config.zig");
 
 const Database = @import("../database.zig");
 
