@@ -13,6 +13,9 @@ pub fn scan(
     var mangas_dir = try suwayomi_dir.openDir("mangas", .{ .iterate = true });
     defer mangas_dir.close();
 
+    const base_path = try suwayomi_dir.realpathAlloc(allocator, "mangas");
+    defer allocator.free(base_path);
+
     const library_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{
         config.catalog_dir,
         config.ingest.default_library_to_use,
@@ -38,7 +41,11 @@ pub fn scan(
             var book_dir = try source_dir.openDir(book_name, .{ .iterate = true });
             defer book_dir.close();
 
-            const book_path = try book_dir.realpathAlloc(allocator, ".");
+            const book_path = try std.fs.path.join(allocator, &.{
+                base_path,
+                entry.name,
+                book_name,
+            });
             defer allocator.free(book_path);
 
             library.importBook(
@@ -47,7 +54,6 @@ pub fn scan(
                 database,
                 book_path,
                 book_name,
-                config.ingest.operation_type,
             ) catch |err| {
                 log.debug("importBook failed! {}", .{err});
                 return error.ImportBookFailed;

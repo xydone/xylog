@@ -13,9 +13,6 @@ metadata: Metadata,
 pub const Ingest = struct {
     /// the name of the library that will be inserted into when ingesting
     default_library_to_use: []u8,
-    operation_type: OperationType,
-
-    pub const OperationType = enum { copy, move };
 };
 
 pub const Metadata = struct {
@@ -46,7 +43,6 @@ const ConfigFile = struct {
     encryption_secret: ?[]const u8,
     ingest: struct {
         default_library_to_use: ?[]const u8,
-        operation_type: Ingest.OperationType,
     },
     metadata: Metadata,
 };
@@ -101,7 +97,6 @@ pub fn init(allocator: Allocator) InitErrors!Config {
                     return error.RequiredNullableFieldMissing;
                 }
             },
-            .operation_type = config_file.ingest.operation_type,
         },
         .metadata = .{
             .comic_info = .{

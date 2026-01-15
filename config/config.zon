@@ -27,10 +27,6 @@
     .ingest = .{
         // Which library to add the new content to
         .default_library_to_use = null,
-
-        // When transfering content from ingest to the content directory, should the files be copied over or moved?
-        // Use `.copy` for copying and `.move` for moving.
-        .operation_type = .copy,
     },
 
     // Settings, specific to the process of applying metadata from files to the database

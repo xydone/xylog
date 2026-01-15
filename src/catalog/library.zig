@@ -180,52 +180,54 @@ pub fn importBook(
     database: Database,
     source_path: []const u8,
     book_folder_name: []const u8,
-    operation_type: Config.Ingest.OperationType,
 ) !void {
     if (self.books.contains(book_folder_name)) return error.BookAlreadyExists;
 
-    switch (operation_type) {
-        .move => {
-            std.fs.cwd().rename(source_path, book_folder_name) catch |err| {
+    const library_path = try self._dir.realpathAlloc(allocator, ".");
+    defer allocator.free(library_path);
+
+    const new_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ library_path, book_folder_name });
+    defer allocator.free(new_path);
+
+    std.fs.cwd().rename(source_path, new_path) catch |err| {
+        switch (err) {
+            error.RenameAcrossMountPoints => {
+                log.warn("the source mount point ({s}) is not the same as the destination mount point ({s}). A copy was performed.", .{ source_path, new_path });
+                try self._dir.makeDir(book_folder_name);
+
+                // cleanup if copy fails midway
+                errdefer {
+                    log.warn("importBook: ran into error. Deleting tree...", .{});
+                    self._dir.deleteTree(book_folder_name) catch |tree_err| {
+                        log.warn("importBook: deleting the tree during cleanup failed! {}", .{tree_err});
+                    };
+                }
+
+                var src_dir = std.fs.openDirAbsolute(source_path, .{ .iterate = true }) catch |src_err| {
+                    log.err("importBook: copy failed to open src_dir! {}", .{src_err});
+                    return error.CopyFailed;
+                };
+                defer src_dir.close();
+
+                var dest_dir = self._dir.openDir(book_folder_name, .{}) catch |dest_err| {
+                    log.err("importBook: copy failed to open dest_dir! {}", .{dest_err});
+                    return error.CopyFailed;
+                };
+
+                defer dest_dir.close();
+                copyDirRecursive(src_dir, dest_dir) catch |copy_err| {
+                    log.err("importBook: copyDirRecursive failed! {}", .{copy_err});
+                    return error.CopyFailed;
+                };
+            },
+            else => {
                 log.err("importBook: move failed! {}", .{err});
                 return error.MoveFailed;
-            };
+            },
+        }
+    };
 
-            try self.addBook(allocator, config, database, book_folder_name);
-        },
-        .copy => {
-            try self._dir.makeDir(book_folder_name);
-
-            // cleanup if copy fails midway
-            errdefer {
-                log.warn("importBook: ran into error. Deleting tree...", .{});
-                self._dir.deleteTree(book_folder_name) catch |err| {
-                    log.warn("importBook: deleting the tree during cleanup failed! {}", .{err});
-                };
-            }
-
-            var src_dir = std.fs.openDirAbsolute(source_path, .{ .iterate = true }) catch |err| {
-                log.err("importBook: copy failed to open src_dir! {}", .{err});
-                return error.CopyFailed;
-            };
-            defer src_dir.close();
-
-            var dest_dir = self._dir.openDir(book_folder_name, .{}) catch |err| {
-                log.err("importBook: copy failed to open dest_dir! {}", .{err});
-                return error.CopyFailed;
-            };
-
-            defer dest_dir.close();
-            copyDirRecursive(src_dir, dest_dir) catch |err| {
-                log.err("importBook: copyDirRecursive failed! {}", .{err});
-                return error.CopyFailed;
-            };
-
-            // INFO: the calls to addBook are identical across both operations, but are called separately.
-            // This is done so we can cleanly leverage the errdefer for cleanup.
-            try self.addBook(allocator, config, database, book_folder_name);
-        },
-    }
+    try self.addBook(allocator, config, database, book_folder_name);
 
     log.debug("importBook: imported {s} from {s}", .{ book_folder_name, source_path });
 }
