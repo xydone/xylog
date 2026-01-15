@@ -76,7 +76,11 @@ pub fn initFromDatabase(allocator: Allocator, catalog_dir: *std.fs.Dir, database
         try library_lookup_table.put(res.id, &libraries[i]);
     }
 
-    const book_lookup_table = try Book.initManyFromDatabase(allocator, database, library_lookup_table);
+    const book_lookup_table = try Book.initManyFromDatabase(
+        allocator,
+        database,
+        library_lookup_table,
+    );
 
     try Chapter.initFromDatabase(
         allocator,

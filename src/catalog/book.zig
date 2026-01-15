@@ -75,11 +75,20 @@ pub fn initManyFromDatabase(
 
     for (book_records) |record| {
         const chapters = allocator.create(ChapterMap) catch @panic("OOM");
+        errdefer allocator.destroy(chapters);
+
         chapters.* = ChapterMap.init(allocator);
+        errdefer chapters.deinit();
+
         const book = allocator.create(Book) catch @panic("OOM");
+        errdefer allocator.destroy(book);
+
         const library = library_lookup_table.get(record.library_id) orelse continue;
 
-        const dir = try library._dir.openDir(record.title, .{ .iterate = true });
+        const dir = library._dir.openDir(record.title, .{ .iterate = true }) catch {
+            log.warn("{s} could not be found inside the data folder, but it is present in the database! Skipping...", .{record.title});
+            continue;
+        };
 
         book.* = .{
             .id = record.id,
