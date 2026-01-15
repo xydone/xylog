@@ -11,6 +11,8 @@ ingest: Ingest,
 metadata: Metadata,
 
 pub const Ingest = struct {
+    /// Scan interval, in minutes.
+    interval: u64,
     /// the name of the library that will be inserted into when ingesting
     default_library_to_use: []u8,
 };
@@ -42,6 +44,7 @@ const ConfigFile = struct {
     scan_on_start: bool = true,
     encryption_secret: ?[]const u8,
     ingest: struct {
+        interval: u64,
         default_library_to_use: ?[]const u8,
     },
     metadata: Metadata,
@@ -89,6 +92,7 @@ pub fn init(allocator: Allocator) InitErrors!Config {
             }
         },
         .ingest = .{
+            .interval = config_file.ingest.interval,
             .default_library_to_use = blk: {
                 if (config_file.ingest.default_library_to_use) |library| {
                     break :blk allocator.dupe(u8, library) catch @panic("OOM");

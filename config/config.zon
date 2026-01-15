@@ -25,6 +25,9 @@
 
     // The folder that will be used to "feed" the library at runtime, by periodically scanning this folder
     .ingest = .{
+        // How often will a scan on the ingest folder be performed.
+        // This value is in minutes.
+        .interval = 30,
         // Which library to add the new content to
         .default_library_to_use = null,
     },

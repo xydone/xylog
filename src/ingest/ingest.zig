@@ -6,7 +6,7 @@ pub fn scan(
     config: Config,
     catalog: *Catalog,
 ) void {
-    const interval = 5 * 60 * std.time.ns_per_s;
+    const interval = config.ingest.interval * 60 * std.time.ns_per_s;
     const ingest_dir = std.fmt.allocPrint(allocator, "{s}/ingest/", .{config.state_dir}) catch @panic("OOM");
     defer allocator.free(ingest_dir);
 
