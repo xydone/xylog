@@ -108,13 +108,6 @@ pub fn scan(
     var filenames = std.ArrayList([]u8).empty;
     defer filenames.deinit(allocator);
 
-    var comic_infos = std.ArrayList(ComicInfo).empty;
-    defer {
-        for (comic_infos.items) |comic_info| {
-            comic_info.deinit(allocator);
-        }
-    }
-
     while (try it.next()) |entry| {
         if (entry.kind == .file) {
             const duped_name = try allocator.dupe(u8, entry.name);
@@ -125,51 +118,26 @@ pub fn scan(
             const path_c = try allocator.dupeZ(u8, absolute_path);
             defer allocator.free(path_c);
 
-            const ChapterAndVolume = struct {
-                volume: i64,
-                chapter: i64,
-            };
-            const chapter_and_volume: ChapterAndVolume = blk: {
-                const name_info: ?Chapter.ParsedInfo = Chapter.parseName(duped_name) catch null;
-                const comic_info = try Chapter.getComicInfo(allocator, path_c);
+            // NOTE: file name takes precedence over ComicInfo.xml.
+            // The decision for this is the fact file names are easily modifiable by the average user and easily visible.
+            // They don't extracting the archive and modifying the information. This behaviour may change in the future.
+            const volume, const chapter = blk: {
+                const comic_info_metadata = try ComicInfoMetadata.scan(
+                    allocator,
+                    duped_name,
+                    path_c,
+                );
 
-                try comic_infos.append(allocator, comic_info);
-                // NOTE: file name takes precedence over ComicInfo.xml.
-                // The decision for this is the fact file names are easily modifiable by the average user and easily visible.
-                // They don't extracting the archive and modifying the information. This behaviour may change in the future.
+                const filename_metadata: ?Chapter.ParsedInfo = Chapter.parseName(duped_name) catch null;
 
-                if (name_info) |info| {
-                    break :blk .{
-                        .chapter = info.chapter,
-                        .volume = info.volume,
-                    };
+                if (filename_metadata) |metadata| {
+                    break :blk .{ metadata.volume, metadata.chapter };
                 }
-                switch (comic_info.comic_info) {
-                    inline else => |ver| {
-                        break :blk .{
-                            .chapter = chapter_blk: {
-                                const string = ver.Number orelse {
-                                    log.err("{s} does not contain chapter information inside the Number field on ComicInfo.xml!", .{duped_name});
-                                    return error.MissingChapter;
-                                };
-                                break :chapter_blk std.fmt.parseInt(i64, string, 10) catch {
-                                    log.err("{s}'s chapter inside ComicInfo.xml is not a valid integer! Found {s}", .{ duped_name, string });
-                                    return error.MissingChapter;
-                                };
-                            },
 
-                            .volume = volume_blk: {
-                                if (ver.Volume == -1) {
-                                    log.err("{s} does not contain volume information inside the Volume field on ComicInfo.xml!", .{duped_name});
-                                    return error.MissingVolume;
-                                }
-                                break :volume_blk ver.Volume;
-                            },
-                        };
-                    },
-                }
+                break :blk .{ comic_info_metadata.volume, comic_info_metadata.chapter };
             };
 
+            // hash the file for koreader sync
             var file = try self._dir.openFile(duped_name, .{ .mode = .read_only });
             defer file.close();
 
@@ -179,8 +147,8 @@ pub fn scan(
             try db_entries.append(allocator, .{
                 .file_name = duped_name,
                 .hash = hash,
-                .volume = chapter_and_volume.volume,
-                .chapter = chapter_and_volume.chapter,
+                .volume = volume,
+                .chapter = chapter,
                 .total_pages = try Chapter.getPageAmount(path_c),
             });
 
@@ -206,12 +174,8 @@ pub fn scan(
     );
     defer allocator.free(responses);
 
-    for (db_entries.items, responses, filenames.items, comic_infos.items) |entry, response, filename, comic_info| {
+    for (db_entries.items, responses, filenames.items) |entry, response, filename| {
         const chapter = allocator.create(Chapter) catch @panic("OOM");
-
-        self.author = switch (comic_info.comic_info) {
-            inline else => |ver| ver.Writer,
-        };
 
         chapter.* = Chapter.init(
             response.chapter_id,
@@ -243,6 +207,48 @@ pub fn deinit(self: Book, allocator: Allocator) void {
         allocator.destroy(self.chapters);
     }
 }
+
+const ComicInfoMetadata = struct {
+    fn scan(
+        allocator: Allocator,
+        name: []u8,
+        path: [:0]u8,
+    ) !struct { chapter: i64, volume: i64 } {
+        const name_info: ?Chapter.ParsedInfo = Chapter.parseName(name) catch null;
+        const comic_info = try Chapter.getComicInfo(allocator, path);
+
+        if (name_info) |info| {
+            return .{
+                .chapter = info.chapter,
+                .volume = info.volume,
+            };
+        }
+        switch (comic_info.comic_info) {
+            inline else => |ver| {
+                return .{
+                    .chapter = chapter_blk: {
+                        const string = ver.Number orelse {
+                            log.err("{s} does not contain chapter information inside the Number field on ComicInfo.xml!", .{name});
+                            return error.MissingChapter;
+                        };
+                        break :chapter_blk std.fmt.parseInt(i64, string, 10) catch {
+                            log.err("{s}'s chapter inside ComicInfo.xml is not a valid integer! Found {s}", .{ name, string });
+                            return error.MissingChapter;
+                        };
+                    },
+
+                    .volume = volume_blk: {
+                        if (ver.Volume == -1) {
+                            log.err("{s} does not contain volume information inside the Volume field on ComicInfo.xml!", .{name});
+                            return error.MissingVolume;
+                        }
+                        break :volume_blk ver.Volume;
+                    },
+                };
+            },
+        }
+    }
+};
 
 const hashFile = @import("../routes/kosync/util.zig").partialMd5;
 
