@@ -1,6 +1,5 @@
 id: i64,
-/// naming convention:
-/// <chapter title> | c<chapter number> | v<volume number>
+/// should be named according to the filename metadata convention.
 name: []const u8,
 volume: i64,
 chapter: i64,
@@ -64,25 +63,6 @@ pub fn initFromDatabase(
 
 pub fn deinit(self: Chapter, allocator: Allocator) void {
     allocator.free(self.name);
-}
-
-pub const ParsedInfo = struct {
-    title: []const u8,
-    volume: i64,
-    chapter: i64,
-};
-
-pub fn parseName(full_name: []const u8) !ParsedInfo {
-    var it = std.mem.splitScalar(u8, full_name, '|');
-    const title = std.mem.trim(u8, it.next() orelse return error.MissingTitle, " ");
-    const volume = std.mem.trim(u8, it.next() orelse return error.MissingVolume, " ");
-    const chapter = std.mem.trim(u8, it.next() orelse return error.MissingChapter, " ");
-
-    return .{
-        .title = title,
-        .volume = try std.fmt.parseInt(i64, volume[1..], 10),
-        .chapter = try std.fmt.parseInt(i64, chapter[1..], 10),
-    };
 }
 
 /// get total amount of pages in a chapter for archive based formats
